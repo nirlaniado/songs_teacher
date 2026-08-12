@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 3,
+  "id": "9f2c4e1a-7b3d-4c58-9e21-6a5d0b8f3c47",
+  "title": "Paper Lanterns",
+  "artist": "Demo Artist",
+  "year": 2024,
+  "key": {
+    "tonic": "C",
+    "mode": "major"
+  },
+  "tempo": 96,
+  "timeSignature": "4/4",
+  "audio": {
+    "path": "audio.mp3",
+    "duration": 63.0
+  },
+  "tags": [
+    "axis-progression",
+    "pop",
+    "study/rotation"
+  ],
+  "notes": "Whole song sits on one four-chord loop. What changes between sections is only *where the loop starts* \u2014 that shift is the entire arrangement trick, and it is exactly the thing a canonical-rotation-only index would flatten away.",
+  "sections": [
+    {
+      "id": "1a7e3b90-5c42-4d8e-b6f1-2c9a4e7d0b53",
+      "name": "Intro",
+      "type": "intro",
+      "start": 0,
+      "end": 12.4,
+      "key": {
+        "tonic": "A",
+        "mode": "minor"
+      },
+      "progression": [
+        "Am",
+        "F",
+        "C",
+        "G"
+      ],
+      "notes": "Enters on the relative minor with no bass, so it reads as A minor rather than C major. Setting the section key explicitly here \u2014 inheriting C major would label this vi-IV-I-V and quietly misfile the section.",
+      "blocks": [
+        {
+          "kind": "chordChart",
+          "id": "c4a9e7d2-3f81-4b60-95ea-7d2c8b0f4193",
+          "barsPerLine": 4,
+          "showRomanNumerals": true,
+          "bars": [
+            {
+              "chords": [
+                "Am"
+              ]
+            },
+            {
+              "chords": [
+                "F"
+              ]
+            },
+            {
+              "chords": [
+                "C"
+              ]
+            },
+            {
+              "chords": [
+                "G"
+              ],
+              "label": "x2"
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "id": "e81b5a03-6d94-4f27-a3c8-0b7e5d9a2f16",
+          "emphasis": "callout",
+          "markdown": "Guitar is capo 3 playing **Am shapes**. Sounds like Am but the voicing keeps E on top through all four chords \u2014 that pedal is what makes the loop feel static."
+        }
+      ]
+    },
+    {
+      "id": "3d5f8c21-9a4b-4e76-8c30-1f6b2d9e4a85",
+      "name": "Verse 1",
+      "type": "verse",
+      "start": 12.4,
+      "end": 38.2,
+      "progression": [
+        "C",
+        "G",
+        "Am",
+        "F"
+      ],
+      "notes": "Same four chords, now entered on the tonic. Bass lands on C and the whole thing flips to major \u2014 nothing harmonic changed, only the entry point.",
+      "blocks": [
+        {
+          "kind": "chordChart",
+          "id": "27f6c8b4-0a5e-4d19-8f42-3c1b6e0d9a75",
+          "barsPerLine": 4,
+          "showRomanNumerals": true,
+          "bars": [
+            {
+              "chords": [
+                "C"
+              ]
+            },
+            {
+              "chords": [
+                "G"
+              ]
+            },
+            {
+              "chords": [
+                "Am"
+              ]
+            },
+            {
+              "chords": [
+                "F"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "6b0d2f47-8e15-4a93-b27c-5d3f9a1e6c04",
+      "name": "Chorus",
+      "type": "chorus",
+      "start": 38.2,
+      "end": 63.0,
+      "progression": [
+        "F",
+        "C",
+        "G",
+        "Am"
+      ],
+      "romanNumerals": [
+        "IV",
+        "I",
+        "V",
+        "vi"
+      ],
+      "notes": "Third rotation. Starting on IV means the chorus never states the tonic on a downbeat until bar 2 \u2014 that suspension is why the hook feels like it is leaning forward.",
+      "blocks": [
+        {
+          "kind": "chordChart",
+          "id": "5d3a0e96-4c27-4b81-bf05-9e6a2d4c7b38",
+          "barsPerLine": 4,
+          "showRomanNumerals": true,
+          "bars": [
+            {
+              "chords": [
+                "F"
+              ]
+            },
+            {
+              "chords": [
+                "C"
+              ]
+            },
+            {
+              "chords": [
+                "G"
+              ]
+            },
+            {
+              "chords": [
+                "Am",
+                "G"
+              ],
+              "beats": [
+                3,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "guitarChord",
+          "id": "b90c4f28-1e63-4a75-9d3f-8c5b2a0e6417",
+          "chords": [
+            {
+              "name": "F",
+              "frets": [
+                1,
+                3,
+                3,
+                2,
+                1,
+                1
+              ],
+              "baseFret": 1
+            },
+            {
+              "name": "C",
+              "frets": [
+                null,
+                3,
+                2,
+                0,
+                1,
+                0
+              ],
+              "baseFret": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "createdAt": "2026-08-09T10:15:00.000Z",
+  "updatedAt": "2026-08-09T10:15:00.000Z"
+}

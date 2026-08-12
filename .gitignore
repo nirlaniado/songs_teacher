@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Secrets. `.env` holds a real API key — never commit it.
+# `.env.example` is the committed template and holds no secret.
+.env
+.env.local
+.env.*.local
+
+# Compiled MCP server
+dist-mcp/
