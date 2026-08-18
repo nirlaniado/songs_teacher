@@ -11,3 +11,9 @@ dist/
 
 # Compiled MCP server
 dist-mcp/
+
+# Compiled LOK server, native host binary, and per-run project state
+dist-lok-server/
+lok/host/mpw-host
+lok/server/fixtures/
+lok/server/cache/
