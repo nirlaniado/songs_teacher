@@ -4,6 +4,7 @@ import { useLibraryStore } from "./store/libraryStore.js";
 import { DeckLibraryScreen } from "./components/DeckLibraryScreen.js";
 import { DeckScreen } from "./components/DeckScreen.js";
 import { LibraryScreen } from "./components/LibraryScreen.js";
+import { LokDeckScreen } from "./components/lok/LokDeckScreen.js";
 import { SongScreen } from "./components/SongScreen.js";
 
 // Cytoscape (+ fcose) is the heaviest dependency in the app and is only ever
@@ -11,7 +12,7 @@ import { SongScreen } from "./components/SongScreen.js";
 // of paying for it on every load.
 const GraphView = lazy(() => import("./components/GraphView.js").then((m) => ({ default: m.GraphView })));
 
-type Screen = "decks" | "editor" | "songs" | "graph";
+type Screen = "decks" | "editor" | "songs" | "graph" | "lok";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("decks");
@@ -87,6 +88,12 @@ export default function App() {
 
   if (screen === "editor") return <DeckScreen onBack={() => setScreen("decks")} />;
 
+  // ── LibreOffice-backed editor (Stage 2/3, experimental) ───────────────────
+  // Fully additive: reachable only from here, touches no store the "editor"
+  // screen above uses. Requires `npm run lok:server` running separately —
+  // LokDeckScreen shows a clear error with the exact command if it isn't.
+  if (screen === "lok") return <LokDeckScreen onBack={() => setScreen("decks")} />;
+
   // ── song-study mode (the earlier analysis tool, kept alongside) ──────────
   if (screen === "songs" || screen === "graph") {
     if (currentSong) return <SongScreen />;
@@ -121,12 +128,19 @@ export default function App() {
   return (
     <div>
       <DeckLibraryScreen onOpen={() => setScreen("editor")} />
-      <div className="mx-auto max-w-3xl px-10 pb-10">
+      <div className="mx-auto flex max-w-3xl justify-between px-10 pb-10">
         <button
           onClick={() => setScreen("songs")}
           className="text-xs text-neutral-600 hover:text-neutral-400"
         >
           Song study tools →
+        </button>
+        <button
+          onClick={() => setScreen("lok")}
+          className="text-xs text-neutral-600 hover:text-neutral-400"
+          title="Requires `npm run lok:server` running separately"
+        >
+          LibreOffice editor (experimental) →
         </button>
       </div>
     </div>
