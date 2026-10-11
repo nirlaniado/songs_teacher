@@ -1,58 +1,60 @@
-# libre-off
+# songs-teacher
 
 ## What this is
 
-**A presentation editor for music teachers.** The primary app is a slide editor in the
-mould of LibreOffice Impress — slide rail, canvas, properties sidebar, layouts, themes —
-plus one thing Impress has no equivalent for: you attach a song and cue each slide to a
-timestamp in it. Press Present and the track plays while the deck follows along, so a
-"song presentation" (intro at 0:00, verse 1 at 1:20, chorus at 2:22) runs itself while
-the teacher talks over it.
+**A presentation editor for music teachers.** The app is a slide editor in the mould of
+LibreOffice Impress — slide rail, canvas, properties sidebar, layouts, themes — plus one
+thing Impress has no equivalent for: you attach a song and cue each slide to a timestamp
+in it. Press Present and the track plays while the deck follows along, so a "song
+presentation" (intro at 0:00, verse 1 at 1:20, chorus at 2:22) runs itself while the
+teacher talks over it.
 
-Three ways to drive it: by hand, by typing instructions to an in-app assistant, or from a
-terminal over MCP (Claude Code / Codex).
+Everything is authored by hand. There is no assistant, no generation pipeline, no MCP
+server and no model-driven editing — all of those were removed. Stem separation remains:
+it is local signal processing (an ONNX model run in the browser), not an assistant.
 
 Secondary and older: a song-study mode for marking sections of a track and writing
 harmonic analysis, plus a knowledge graph linking songs by shared harmony. Still works,
 reachable from the start screen, no longer what the app is for.
 
-### Non-negotiables
+### Product direction
 
-- **No *musical* inference.** Nothing detects chords, infers keys, or derives structure
-  from audio. Analysis is authored by hand.
-  *Amended:* an earlier blanket "no audio-ML" rule was retired by the user to allow stem
-  separation. Separation transforms audio for playback — it does not analyse it — so the
-  narrower rule above is the one that binds. Do not read "stems" as licence to add chord
-  or key detection.
-- **Audio is played, never acquired.** Nothing downloads, rips or transcodes audio from a
-  streaming service. (The YouTube player was removed entirely in song schema v3.)
-- **The assistant places text; it never writes content.** It does not produce lyrics,
-  chords or analysis. Users paste what they hold rights to. See "Lyrics" below.
-  *Extends to tab notation:* a slide's `tab` element is pasted verbatim, same as chords.
-  Nothing parses it as fretboard positions, transposes it, or checks it against a chord —
-  it is a block of text with a monospace font forced on it, not a musical object.
+The native React/TypeScript editor is the sole editing path. The experimental
+LibreOfficeKit integration is retired. Do not reintroduce a LibreOffice runtime,
+C++ host, headless converter or parallel editor. Do not reintroduce an assistant,
+pipeline or other AI-driven feature unless the user asks for it.
 
 ### About the name
 
-`libre_off` refers to LibreOffice, but **we do not vendor or fork it.** Asked three times,
-so settled here: Impress is not separable (`sd/` is entangled with `svx`, `editeng`,
-`sfx2`, `vcl` via UNO), it's ~10M lines of C++, and it has no web target — there is no
-"presentation module" to lift out of the GitHub mirror. Licensing was never the blocker
-(MPL-2.0 would permit reuse); **portability** is.
+`songs_teacher` is the project name — the folder, and the remote at
+`github.com/nirlaniado/songs_teacher`. It was `libre_off` until renamed; the app owns its
+document model, renderer, editor and playback engine, and never required a LibreOffice
+runtime, so the old name had stopped describing anything. Future format support must not
+require the retired LibreOffice core integration.
 
-What we *do* copy is the **interaction design**: the arrangement of the panels, the names
-of the commands, the keyboard shortcuts, and the rules that make them feel right (see
-"The editing surface" below). Someone who knows Impress should find things where they
-expect them. The implementation underneath is hand-built React.
+**The string `libre-off` deliberately survives in four places, and renaming it is a data
+migration, not a rename.** Do not "tidy" these:
 
-LibreOffice's remaining role is narrow and optional: ODF as an import/export format
-(`.odp` is a ZIP of XML), and headless `soffice` as a converter. Both are future work.
+- `src/adapters/indexeddb.ts` — five IndexedDB **database names**. Renaming them doesn't move
+  anybody's data; it opens five new empty databases and leaves every saved deck and song
+  unreachable on disk.
+- `src/adapters/browser.ts` — the handle store's database name, and the File System Access
+  picker `id` that remembers which folder the user last opened.
+- `src/audio/separate.ts` — `CACHE_NAME`, the Cache API bucket holding the **~172MB** ONNX
+  model. A new name means every user re-downloads it.
+- `src/deck/bundle.ts` — `MANIFEST` and the `app` field written inside exported `.zip`
+  bundles, and checked on import. A new value makes every previously exported deck fail to
+  import.
+
+Changing any of them needs a migration shipped alongside (hard rule 6's reasoning applies:
+a reader must handle what was already written). Nothing user-visible depends on these
+strings, so the cost has no matching benefit.
 
 ---
 
 ## Architecture
 
-Seven load-bearing ideas. Everything else is detail.
+Five load-bearing ideas. Everything else is detail.
 
 ### 1. One renderer at three scales
 
@@ -84,28 +86,7 @@ Every mutation in `deckStore` is a pure `Deck -> Deck` transform funnelled throu
 a correct undo for every feature forever. Snapshots cost memory we have and buy
 correctness we'd otherwise have to earn repeatedly.
 
-### 3. One op vocabulary, several producers
-
-The assistant's contract is `src/agent/ops.ts`: a Zod discriminated union of operations
-plus a `Target` union for addressing slides. **Three independent producers emit it:**
-
-```
-instruction
-     ├─ deterministic parser   (grammar; free, instant, offline)   ← default
-     ├─ language model         (any OpenAI-compatible endpoint)
-     └─ MCP client             (Claude Code / Codex, over stdio)
-                    ↓
-              Op[]  ─→ validateOps (dry run + Deck.safeParse)
-                    ─→ preview / describeOps
-                    ─→ applyOps  (pure, whole batch, ONE commit)
-```
-
-*Why:* preview, validation, undo and tests never learn which engine answered. Adding a
-producer touches nothing downstream, and a model physically cannot propose an operation
-the app doesn't implement — malformed replies are rejected by the same schema, not
-applied. This is the single most important structural decision in the codebase.
-
-### 4. One player interface, two engines
+### 3. One player interface, two engines
 
 `src/audio/` — `DeckPlayer` is what every screen talks to. `useDeckPlayer` picks the
 engine from the deck (`ElementPlayer` for a plain track, `StemPlayer` for a separated one)
@@ -122,7 +103,7 @@ started against one `AudioContext.currentTime` are sample-accurate by constructi
 cost is that those nodes are one-shot: pausing and seeking both mean discarding and
 rebuilding them, which `StemPlayer` hides.
 
-### 5. The adapter boundary
+### 4. The adapter boundary
 
 `LibraryAdapter` (`src/adapters/types.ts`) is the entire platform surface. Everything
 above it is plain browser code.
@@ -131,43 +112,9 @@ above it is plain browser code.
 "ship on Electron" into a second implementation of one file rather than a port.
 
 **Rule: no `fs`, `path`, `child_process` or Electron imports outside the adapter layer.**
-Want the filesystem? Add a method to `LibraryAdapter`. The MCP server is Node and lives
-*outside* `src/` precisely so this holds.
+Want the filesystem? Add a method to `LibraryAdapter`.
 
-### 6. The model asks for a lookup; it never guesses
-
-Understanding an instruction is the model's job, not a regex's. A reply may be
-`{"lookup":{"query":"…"}}` instead of `{"ops":[…]}`; the store searches Genius and asks
-once more, carrying the outcome:
-
-```
-instruction ─→ model ─→ {"lookup":{query}}
-                            ↓
-                     searchSongs(query)  →  scored candidates
-                            ↓
-      confident match ──────┼────── weak matches ────── nothing
-             ↓              │            ↓                 ↓
-    facts → model      (ask the user, then resume)   failure → model
-             ↓                                              ↓
-          ops[]                                  {"ops":[],"message":"not found"}
-```
-
-*Why:* intent detection was regexes in `src/agent/lookup.ts`, patched four times — typos,
-trailing clauses, destinations, edit verbs — and each fix missed the next phrasing. A
-model reads all of them correctly. It stays as the fallback when no model is configured
-(`hasModelProvider()`), because a parser-only setup still needs *something*.
-
-*Why exactly one round trip:* the provider ignores a second `lookup` once an outcome is
-present. A model that dislikes a result would otherwise search in a loop, and every
-attempt is a request the user pays for.
-
-*Why ask instead of taking the best hit:* Genius indexes user collection pages as songs.
-Trusting `hits[0]` is how "KamZ's Music Collection" reached a title slide. Hits are scored
-by token overlap (`overlap`, prefix-tolerant so typos still match); below `MIN_CONFIDENCE`
-the user picks from the candidates or says none fit — and "none fit" goes back to the
-model as a failure, so the answer is "I couldn't find it", never an invention.
-
-### 7. The editing surface is a selection plus commands over it
+### 5. The editing surface is a selection plus commands over it
 
 `selectedElementIds: string[]` in `deckStore` is the single source of truth for what is
 picked. Every editing command — align, arrange, distribute, clipboard, nudge, delete —
@@ -175,8 +122,8 @@ reads that array and commits **one** `Deck -> Deck` transform, so a gesture is o
 step regardless of how many elements it touched.
 
 *Why an array and not an id:* align, distribute and "delete these three" are meaningless
-on one element, and the agent's ops have taken `elementIds` from the start. A
-single-selection UI was the narrower half of a vocabulary the app already spoke.
+on one element. A single-selection UI would have to be widened the moment any of them
+arrived, so the store holds the general case from the start.
 
 *Why the arithmetic lives in `src/deck/geometry.ts`:* snapping, marquee enclosure and
 align offsets are exactly the kind of thing that is wrong by two units in a way a
@@ -210,20 +157,12 @@ locked). Two things about it are deliberately narrower than `text`:
   `SlideRenderer.tsx`) with `white-space: pre` (no wrap). Tab notation is an ASCII grid —
   a proportional font or a wrapped line breaks the vertical alignment between string
   lines, so these aren't style knobs the way they are on `text`.
-- **The agent can see one but not create or edit one.** `describeDeck` labels it correctly
-  (`kind === "tab"` has its own branch — the previous text/image/shape chain was an
-  if/if/fallback, not an exhaustive switch, so a missed branch there silently mislabels
-  a new kind as the last one checked). There is no `addTabBox` op; `setElementText` and
-  `styleElements` are both guarded to `el.kind === "text"` and no-op on a tab element
-  rather than erroring. Adding tabs to a slide is a manual step (the `+ Tab` button) —
-  consistent with "the assistant never authors content" above, since generating tab text
-  would be exactly that.
 - **`+ Tab ▾` opens a tuning picker and seeds a labelled scaffold, not an empty box.**
   `TUNING_PRESETS` and `tabScaffold()` live in `deck/templates.ts`, next to
   `THEME_PRESETS` — same status: static reference data the user picks from, not
   inference. Covers Standard, Half step down/up, Drop D, Drop C, Drop C#, each as a
   fixed high-to-low string list (`tuningById`, defaulting to Standard for an unknown
-  id). This is a UI convenience, not the rule above being bent: `e|-------` carries no
+  id). This is a UI convenience: `e|-------` carries no
   musical information — a string name and dashes — the same way an empty table a word
   processor inserts carries no prose. The user still supplies every fret number by hand.
   The top string's label is lowercased and the rest aren't, consistently across every
@@ -281,24 +220,18 @@ Each was chosen against a real alternative. Don't substitute without a reason.
 | Slide rendering | **DOM elements** | Not canvas/WebGL. Gives text selection, inline editing, and printable output free; costs fine-grained pixel control we don't need. |
 | Slide framework | **Hand-rolled React** | Not reveal.js: it owns the DOM and routing, and we drive navigation from an audio clock. Costs us writing the editor; buys full control of the sync engine. |
 | Coordinate space | **Fixed 1280×720 units** | Not percentages/responsive. Costs a scale calculation; buys pixel-identical editing and presenting. |
-| Validation | **Zod** | Schema and TS types from one definition. Runtime cost on parse; buys a single source of truth that the MCP server, the browser and the tests all share. |
+| Validation | **Zod** | Schema and TS types from one definition. Runtime cost on parse; buys a single source of truth that the app and the tests share. |
 | State | **Zustand** | Not Redux (ceremony) or Context (re-render storms). Selector-based subscription is what keeps a 60fps clock out of the render tree. |
 | Playback clock | **`requestAnimationFrame`** | Not the `timeupdate` event, which fires ~4×/sec — a slide cued to a downbeat would visibly arrive late. |
 | Desktop (planned) | **Electron**, not Tauri | Tauri's OS webview means codec support varies per platform — unacceptable for an audio app. Electron bundles Chromium; costs bundle size. |
 | Browser storage | **File System Access API**, IndexedDB fallback | Real files where possible. IndexedDB keeps Firefox/Safari working but has no folder to back up and dies with site data. Not a strict upgrade — surfaced in the UI, not hidden. |
 | Graph index | **In-memory**, not SQLite | `better-sqlite3` is a native module that cannot load in a browser tab. Same `{nodes, edges}` shape, rebuilt on demand; swappable in the Electron phase. |
-| Assistant default | **Deterministic parser** | A grammar, not a model. Free, instant, offline, no account — so common commands never cost anything. Costs coverage: typos and compound sentences need the model tier. |
-| Assistant model tier | **Any OpenAI-compatible endpoint** | Not hard-wired to OpenAI. The endpoint decides who pays: local Ollama is free, a hosted key is the user's. One request shape covers all. |
-| Intent detection | **The model asks for a lookup** | Not regex phrase-matching, which needed a patch per phrasing and still misread typos and compound sentences. Costs one extra round trip when a song is involved; the regexes survive only as the no-model fallback. |
-| Uncertain song match | **Ask the user** | Not the top hit (Genius indexes collection pages as songs) and not silent failure (a typo'd query often has a right answer one click away). Costs an interruption, only when the scorer isn't confident. |
-| MCP transport | **stdio, compiled to JS** | Not `vite-node`/`tsx`: a dev runner's banner on stdout corrupts the JSON-RPC stream. Costs a build step; buys a clean channel. |
-| Deck writes (Node) | **temp file + `rename`** | `writeFile` truncates and refills, so a shorter write over a longer one leaves the old tail and corrupts JSON. Observed in testing, not theoretical. |
 | Multi-track sync | **Web Audio buffers**, not `<audio>` elements | Media elements each run their own clock and drift within seconds. Buffer sources started against one context clock are sample-accurate. Costs memory (~85MB per decoded 4-min stem) and one-shot nodes that must be rebuilt to seek. |
 | Stem separation | **In-browser ONNX** (`demucs-web` + `onnxruntime-web`) | Not a Python/Node service: self-contained, nothing to install, nothing uploaded. Costs a ~172MB model download (cached) and minutes of CPU per song. Needs COOP/COEP for `SharedArrayBuffer`. |
 | Separation library | **`demucs-web`**, not hand-ported inference | It owns STFT (4096/1024), reflect padding, segmentation and overlap-add — all easy to get subtly wrong. Costs: it hardcodes four sources, so a guitar stem isn't available. |
 | Stem storage | **WAV** | Trivial to encode with no dependency; the browser has no non-realtime MP3/Opus encoder. Costs ~10MB per stem-minute on disk. |
 | Isolation policy | **COEP `credentialless`**, not `require-corp` | `require-corp` blocks cross-origin subresources that don't opt in, which would break fetching the model from Hugging Face. |
-| Lyrics | **User paste only** | Genius has no lyrics endpoint (metadata only); "lyrics libraries" scrape HTML against its terms. Licensed APIs (Musixmatch/LyricFind) need commercial terms. So: users paste, the app lays out. |
+| Lyrics | **From the user's own Ultimate Guitar chart, or typed** | No lyrics *provider* is integrated (Musixmatch/LyricFind need commercial terms; lyric sites are off-limits). The chord agent keeps the lyrics on the chart the user's own subscribed account opens, and they are used on slides and to time the deck. |
 
 ---
 
@@ -340,7 +273,7 @@ switches to a multi-selection panel when more than one thing is picked.
 
 **Focus mode** (`⛶ Focus`, or Ctrl+Shift+F) fills the screen with the editor and drops the
 app chrome and the music panel — for building slides when timing isn't the job. The slide
-rail, properties sidebar and assistant each toggle from its strip, so it goes as far as
+rail, properties sidebar and music panel each toggle from its strip, so it goes as far as
 "canvas only". Leaving restores the music panel unless it was reopened inside focus mode.
 
 *Why a flag on `DeckScreen`, not a second component:* forking the editor to make it bigger
@@ -355,41 +288,13 @@ telling React (Esc, F11), which needs a `fullscreenchange` listener. Focus mode 
 for the *transition* out of fullscreen rather than testing "focus && !active", because
 `requestFullscreen` is async and the direct test cancels focus mode before it starts.
 
-### Using the assistant
-
-Type an instruction → it proposes a plan → you read it → Apply. The batch lands as **one**
-undo step. Plan lines name the slides that *actually resolved*, which is how a misread
-target is caught before it happens.
-
-Paste `[Section]`-tagged text to distribute a whole song's content across slides at once,
-creating any slide that doesn't exist. Shift+Enter for a newline; Enter sends.
-
-Ask for song details ("add the metadata for *X* to a new first slide") and it searches
-Genius itself. If nothing matches confidently it shows the candidates and waits — pick
-one, or **None of these**, and it says it couldn't find the song rather than making the
-details up.
-
-### Driving it from the CLI
-
-```bash
-npm run mcp:build
-# register dist-mcp/mcp/server.js with --library <your library folder>
-```
-
-Tools: `list_decks`, `read_deck`, `describe_capabilities`, `create_deck`, `apply_ops`
-(with `dryRun`), `delete_deck`, `genius_search`, `genius_title_slide`.
-
-Only **real-folder** libraries work — an IndexedDB library lives inside the browser and is
-unreachable from a terminal. There is **no undo on disk**; use `dryRun` for large plans.
-
 ### Commands
 
 ```bash
 npm run dev        # vite dev server — the daily loop
-npm test           # vitest — 328 tests
+npm test           # vitest — 277 tests
 npm run typecheck  # tsc --noEmit
-npm run build      # typecheck + production build (refuses to run with a key in .env)
-npm run mcp:build  # compile the MCP server to dist-mcp/
+npm run build      # typecheck + production build
 ```
 
 ---
@@ -401,7 +306,7 @@ Break these and the design stops working. Each was argued through, not defaulted
 0. **Slides live in one 1280×720 space, scaled at the edges.** Never fork `SlideRenderer`
    into a separate "present" renderer; never store screen pixels or percentages.
 1. **No `fs`/`path`/`child_process`/Electron outside the adapter layer.** `src/` is
-   browser-pure. `mcp/` is the Node counterpart and lives outside `src/` for this reason.
+   browser-pure.
 2. **Nothing derived is stored in `song.json`.** Roman numerals, canonical rotations,
    n-grams and edge weights are index data, rebuilt on scan — so changing the matching
    algorithm is a re-index, not a migration.
@@ -427,8 +332,6 @@ Break these and the design stops working. Each was argued through, not defaulted
    graph index: derived or ephemeral things stay out of the saved file. `deckStore.test.ts`
    guards this for the view state.
 
-9. **The agent never authors content.** No lyrics, chords, keys or analysis. It places
-   text the user supplied, verbatim — including their typos.
 
 ---
 
@@ -510,9 +413,6 @@ Break these and the design stops working. Each was argued through, not defaulted
 - **Selection-derived lists must be memoised.** `elements.filter(el => selectedIds.includes(el.id))`
   is exactly the fresh-array trap above; `SlideCanvas` and `PropertiesPanel` compute it in
   a `useMemo` or in the render body, never in a selector.
-- **Describe a batch against the evolving deck.** `describeOps` folds state between ops;
-  describing them all against the starting deck reports "matches nothing" for anything
-  depending on an earlier op — telling the user nothing will happen when it will.
 - **Auto-advance must yield to the presenter.** `PresentMode` keeps a `manual` flag: once
   an arrow key is pressed the clock stops changing slides until the presenter resumes. A
   teacher answering a question must not have the slide yanked forward.
@@ -520,8 +420,6 @@ Break these and the design stops working. Each was argued through, not defaulted
   them, so a deck can mix timed and untimed material.
 - **Duplicating a slide must not copy its cue**, and element ids must be regenerated —
   duplicate cues break the forward rule; duplicate element ids break selection.
-- **Concurrent deck writes need serializing.** MCP clients may call tools in parallel;
-  without a per-deck lock two edits lose one update *and* can corrupt the file.
 - **`restore()` vs `attach()`.** Chromium persists directory handles but drops the
   permission grant, so `restore()` often returns false. The "open library" button must
   exist on the load path — `attach()` outside a user gesture throws.
@@ -532,36 +430,22 @@ Break these and the design stops working. Each was argued through, not defaulted
 
 ---
 
-## Secrets
-
-`.env` holds `VITE_OPENAI_API_KEY` (assistant) and `GENIUS_ACCESS_TOKEN` (MCP metadata).
-
-**Vite inlines `VITE_*` at build time**, so that key becomes a literal in `dist/`. Fine
-locally — this app is built to run on your own machine — but it means a browser can never
-hold a secret. Obfuscation doesn't help: the code that unwraps it also ships. The only
-real fixes are each user supplying their own key, or a server holding it.
-
-`npm run build` therefore **refuses to run** while a real key is in `.env`, since a
-warning would scroll past unnoticed. Escape hatch: `ALLOW_BUNDLED_KEY=1 npm run build`.
-
-`GENIUS_ACCESS_TOKEN` is deliberately **not** `VITE_`-prefixed — Node reads it directly,
-so it never reaches the browser bundle.
-
----
-
 ## Lyrics
 
-Recurring request; settled here.
+Revisited by the user; the earlier "no lyrics at all" rule is replaced. Lyrics come from exactly
+two places: text the user types or pastes, and the lyric lines on the Ultimate Guitar chart that
+the chord agent opens with the user's own subscribed account (`ChordLine.row`/`lyric`,
+`server/ug/core.ts` `parseChordContent`). No lyric provider or lyric site is integrated —
+Musixmatch/LyricFind need commercial terms and scraping lyric sites breaks theirs; don't add one.
 
-The **Genius API returns metadata only** — title, artist, album, release date, artwork.
-It has no lyrics endpoint, because Genius licenses lyric text from publishers and holds no
-redistribution rights. Libraries that appear to fetch lyrics from Genius use the API only
-to find a song's page URL and then scrape the HTML, which is outside the API and against
-its terms. `mcp/genius.ts` says this at the top: **do not add scraping there.**
-
-Legitimate routes: a licensed provider (Musixmatch, LyricFind — commercial terms, free
-tiers return partial text), or the user pasting text they hold rights to. The latter is
-built: `[Section]`-tagged paste distributes content across slides.
+What the lyrics are for: they appear under the chords on generated slides, and they time the deck.
+`createDeckFromChords` sends the MP3 (audio only) to OpenAI via the local service for a
+timestamped transcript (`server/ug/transcribe.ts`, `POST /api/ug/transcribe`), then
+`audio/lyricSync.ts` matches each section's lyrics to the transcript **in the browser** — the
+chart's lyrics are never sent anywhere. `audio/segment.ts` `planFromMatches` turns matches into
+cues and `planCues` is the music-only fallback. A deck does not store lyrics separately (they are
+in the slides' text), so **Auto-suggest cues** in the Music sync panel re-times from the music
+alone.
 
 ---
 
@@ -579,31 +463,18 @@ src/
 │   ├── templates.ts  LAYOUTS (placeholder generators), THEME_PRESETS, applyLayout()
 │   ├── geometry.ts   ★ editing maths: snapping, marquee enclosure, bounds, align
 │   └── bundle.ts     .zip export/import of a deck and its media
-├── agent/            the assistant — one vocabulary, several producers
-│   ├── ops.ts        ★ THE CONTRACT: Op + Target unions
-│   ├── targets.ts    resolveTarget() — "verses 1 2 3" → slide indexes
-│   ├── apply.ts      applyOps() pure batch transform; validateOps() dry run
-│   ├── describe.ts   describeOp/describeOps — preview text, folds state forward
-│   ├── prompt.ts     system prompt (the toolbook) + JSON Schema for models
-│   ├── parse/        sections.ts (vocabulary) · grammar.ts (the parser)
-│   └── providers/    deterministic · openaiCompatible (.env or ⚙) · codexCli (desktop)
 ├── adapters/         the only place the platform may leak in
 │   ├── types.ts · paths.ts · browser.ts · indexeddb.ts
 │   └── index.ts      sharedLibraryAdapter() — ONE instance; attachment is
 │                     per-instance state, so two would disagree about being open
-├── store/            deckStore ★ · agentStore · playerStore · libraryStore · graphStore
+├── store/            deckStore ★ · playerStore · libraryStore · graphStore
 ├── components/       DeckLibraryScreen · DeckScreen · deck/{SlideRenderer ★,
 │                     SlideCanvas ★, CanvasContextMenu, SlidePanel, EditorToolbar,
-│                     PropertiesPanel, TimingPanel ★, PresentMode ★, AgentPanel,
-│                     AgentSettings, BackgroundEditor, StemMixer, SeparateStems,
+│                     PropertiesPanel, TimingPanel ★, PresentMode ★,
+│                     BackgroundEditor, StemMixer, SeparateStems,
 │                     useDeckAssets, useFullscreen} · (song-study screens)
 ├── theory/ graph/    song-study: roman numerals, Booth's rotation, n-grams, edges
 └── types/            ambient .d.ts only (Vite env)
-
-mcp/                  Node-only. Outside src/ so hard rule #1 holds.
-├── library.ts        fs deck I/O — atomic writes, per-deck write serialization
-├── genius.ts         Genius METADATA client (no lyrics; see above)
-└── server.ts         stdio server; apply_ops takes the same Op vocabulary
 ```
 
 ### On disk
@@ -622,20 +493,56 @@ first open.
 
 ## Roadmap
 
-Done: deck schema · layouts/themes · canvas editing · undo/redo · image & colour
-backgrounds · MP3 cues · fullscreen present · assistant (parser + model + MCP) · Genius
-metadata · song-study mode with theory engine and harmonic graph.
+First: make the native editor usable and reliable end to end. Existing foundations
+include layouts/themes, canvas editing, undo/redo, backgrounds, music cues, stems,
+fullscreen presentation and song-study tools.
 
-Next, roughly in order:
+Potential editor improvements include presenter view, richer text, grouping and native
+format export/import. Set detailed priorities with the user as that work begins.
+LibreOffice integration is retired.
 
-1. **Presenter view** — speaker notes + next-slide preview on a second screen.
-   `slide.notes` already exists and is editable; nothing displays it.
-2. **ODF export, then import** — `.odp` is a ZIP of XML. Export first (we control the
-   shape); import is much harder.
-3. **PDF export** — probably a print stylesheet over `SlideRenderer`.
-4. **Electron** — second `LibraryAdapter`, `runCodex` for the Codex provider, and a
-   `better-sqlite3` graph index.
+---
 
-Deferred, don't build early: slide transitions and per-element animation, collaborative
-editing, video elements, rich per-word text styling, pitch shift, metronome, staff
-notation.
+## Agent team
+
+Development runs as a small agent team inside Herdr. The user does **all** devops: they own the
+remote, merges, CI secrets, tokens and releases. Agents only ever produce reviewed branches.
+
+| Seat | Model | Role |
+|---|---|---|
+| `pm` | Opus 5 | Board, briefs, dispatch, acceptance, PRs. Writes no production code. |
+| `dev` | Opus 5 (Sonnet 5 for mechanical tasks) | Implements one task at a time in its own worktree. |
+| `review` | codex / GPT-5.6-Sol | Read-only audit of the diff. Different model family on purpose. |
+
+Each seat's standing prompt is a committed file in `.herdr/seats/`. **Only `pm` may write there** —
+a seat cannot edit its own constraints, and because every change reaches the default branch
+through a PR the user merges, the gate enforces that even if the instruction is ignored.
+
+**Isolation:** the worktree is a seat's permanent desk (`node_modules` stays installed, cwd never
+moves); the branch is the disposable task (`feat/<issue-number>`, one atomic merge each). Only `pm`
+touches the default-branch checkout. A fresh worktree needs its own `npm install` —
+`node_modules` is gitignored and not shared.
+
+**Board:** GitHub Issues, single source of truth. The brief lives in the issue body; issues
+labelled `devops` are assigned to the user.
+
+**Gate order, cheapest first** — the reviewer is the second most expensive gate and the user is
+the most expensive:
+
+1. `npm test` + `npm run typecheck` locally in the worktree
+2. push `feat/<n>` → `ci.yml` proves it on a clean machine (this is the only gate that catches a
+   new file the implementer forgot to `git add`)
+3. green → `review` audits the diff, with CI's result as evidence
+4. sign-off → `pm` opens the PR → `main.yml` runs on it → the user merges
+
+**Hub and spoke:** seats never prompt each other. Every handoff routes through `pm`. An
+agent-to-agent chain has no supervisor and can deadlock with nothing on screen.
+
+**Escalation:** `pm` decides naming, style, test placement and scope trims. The user decides a
+`CLAUDE.md` hard-rule dispute, any schema/migration or architectural change, anything
+security-touching, and any `dev`/`review` disagreement still live after one exchange. A `blocked`
+agent raises a desktop notification and waits — `pm` never answers an approval for the user.
+
+**Concurrency:** one `dev` seat; a second only once the merge queue clears comfortably; hard cap
+of two. The user is the only merger, so extra branches lengthen their queue rather than shipping
+more.

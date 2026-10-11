@@ -3,17 +3,15 @@ dist/
 .DS_Store
 *.log
 
-# Secrets. `.env` holds a real API key — never commit it.
-# `.env.example` is the committed template and holds no secret.
+# Local overrides. `.env.example` is the committed template.
 .env
 .env.local
 .env.*.local
 
-# Compiled MCP server
-dist-mcp/
+# Local Ultimate Guitar session, downloaded browser and imported charts.
+.ug-agent/
 
-# Compiled LOK server, native host binary, and per-run project state
-dist-lok-server/
-lok/host/mpw-host
-lok/server/fixtures/
-lok/server/cache/
+# Seat credentials. The real ones live in ~/.herdr/, outside the repo — this is
+# a backstop in case one is ever dropped in here by mistake.
+.herdr/*.env
+.herdr/**/*.env

@@ -118,11 +118,4 @@ export interface LibraryAdapter {
    */
   readPeaks?(song: Song): Promise<number[][] | null>;
   writePeaks?(song: Song, peaks: number[][]): Promise<void>;
-
-  /**
-   * Deferred — Electron only. Runs headless LibreOffice over an .odp and
-   * returns per-slide image paths. Left optional so nothing in the UI may
-   * assume it exists.
-   */
-  renderSlides?(songId: string, odpRelPath: string): Promise<string[]>;
 }

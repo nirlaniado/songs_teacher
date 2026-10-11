@@ -4,15 +4,15 @@ import { useLibraryStore } from "./store/libraryStore.js";
 import { DeckLibraryScreen } from "./components/DeckLibraryScreen.js";
 import { DeckScreen } from "./components/DeckScreen.js";
 import { LibraryScreen } from "./components/LibraryScreen.js";
-import { LokDeckScreen } from "./components/lok/LokDeckScreen.js";
 import { SongScreen } from "./components/SongScreen.js";
 
 // Cytoscape (+ fcose) is the heaviest dependency in the app and is only ever
 // needed on the graph screen — code-split it out of the main bundle instead
 // of paying for it on every load.
 const GraphView = lazy(() => import("./components/GraphView.js").then((m) => ({ default: m.GraphView })));
+const UltimateGuitarAgent = lazy(() => import("./components/UltimateGuitarAgent.js").then(m => ({ default: m.UltimateGuitarAgent })));
 
-type Screen = "decks" | "editor" | "songs" | "graph" | "lok";
+type Screen = "decks" | "editor" | "songs" | "graph" | "ug";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("decks");
@@ -42,12 +42,14 @@ export default function App() {
     if (attached) void restoreSongs();
   }, [attached, restoreSongs]);
 
+  if (screen === "ug") return <Suspense fallback={<Centered>טוען את סוכן האקורדים…</Centered>}><UltimateGuitarAgent onBack={() => setScreen("decks")} onDeckCreated={() => setScreen("editor")} /></Suspense>;
+
   if (!supported) {
     return (
       <Centered>
         <p className="max-w-sm text-center text-sm text-neutral-400">
           This browser has neither the File System Access API nor IndexedDB, so there's
-          nowhere for libre-off to keep your presentations. Try a different browser.
+          nowhere for songs-teacher to keep your presentations. Try a different browser.
         </p>
       </Centered>
     );
@@ -57,7 +59,7 @@ export default function App() {
     return (
       <Centered>
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
-          <h1 className="text-2xl font-semibold text-neutral-100">libre-off</h1>
+          <h1 className="text-2xl font-semibold text-neutral-100">songs-teacher</h1>
           <p className="text-sm text-neutral-400">
             Presentations that follow the music — build slides, attach a song, and cue each
             slide to a moment in the track.
@@ -81,18 +83,13 @@ export default function App() {
             {attaching ? "Opening…" : usingFallbackStorage ? "Get started" : "Open folder"}
           </button>
           {error && <p className="max-w-sm text-center text-xs text-red-400">{error}</p>}
+          <button onClick={() => setScreen("ug")} className="mt-3 text-sm text-emerald-400 hover:text-emerald-300">סוכן אקורדים · Ultimate Guitar</button>
         </div>
       </Centered>
     );
   }
 
   if (screen === "editor") return <DeckScreen onBack={() => setScreen("decks")} />;
-
-  // ── LibreOffice-backed editor (Stage 2/3, experimental) ───────────────────
-  // Fully additive: reachable only from here, touches no store the "editor"
-  // screen above uses. Requires `npm run lok:server` running separately —
-  // LokDeckScreen shows a clear error with the exact command if it isn't.
-  if (screen === "lok") return <LokDeckScreen onBack={() => setScreen("decks")} />;
 
   // ── song-study mode (the earlier analysis tool, kept alongside) ──────────
   if (screen === "songs" || screen === "graph") {
@@ -128,19 +125,13 @@ export default function App() {
   return (
     <div>
       <DeckLibraryScreen onOpen={() => setScreen("editor")} />
-      <div className="mx-auto flex max-w-3xl justify-between px-10 pb-10">
+      <div className="mx-auto flex max-w-3xl gap-6 px-10 pb-10">
+        <button onClick={() => setScreen("ug")} className="text-xs text-emerald-400 hover:text-emerald-300">סוכן אקורדים · Ultimate Guitar</button>
         <button
           onClick={() => setScreen("songs")}
           className="text-xs text-neutral-600 hover:text-neutral-400"
         >
           Song study tools →
-        </button>
-        <button
-          onClick={() => setScreen("lok")}
-          className="text-xs text-neutral-600 hover:text-neutral-400"
-          title="Requires `npm run lok:server` running separately"
-        >
-          LibreOffice editor (experimental) →
         </button>
       </div>
     </div>

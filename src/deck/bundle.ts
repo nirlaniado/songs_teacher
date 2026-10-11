@@ -135,7 +135,7 @@ export async function readDeckBundle(file: Blob): Promise<ImportResult> {
   const deckFile = entries[LAYOUT.deckFile];
   if (!deckFile) {
     throw new Error(
-      `That doesn't look like a libre-off presentation — no ${LAYOUT.deckFile} inside.`,
+      `That doesn't look like a songs-teacher presentation — no ${LAYOUT.deckFile} inside.`,
     );
   }
 

@@ -1,6 +1,15 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { newDeck, type Slide, type SlideElement } from "../schema/deck.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { newDeck, type Deck, type DeckSummary, type Slide, type SlideElement } from "../schema/deck.js";
 import { arrange, useDeckStore } from "./deckStore.js";
+import type { LibraryAdapter } from "../adapters/types.js";
+import type { ChordResult } from "../ug/types.js";
+import { cuesForAudio } from "../audio/autoCue.js";
+
+// Audio decoding needs a browser; the analysis itself is tested in segment.test.ts.
+vi.mock("../audio/autoCue.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../audio/autoCue.js")>()),
+  cuesForAudio: vi.fn(),
+}));
 
 /**
  * The editing commands mirrored from Impress.
@@ -307,5 +316,178 @@ describe("tab elements", () => {
     store.duplicateSelection();
     expect(elementsNow()).toHaveLength(3);
     expect(elementsNow().at(-1)!.kind).toBe("tab");
+  });
+});
+
+/** A minimal in-memory LibraryAdapter — just enough for writeDeck/readDeck/listDecks. */
+function fakeAdapter(): LibraryAdapter {
+  const decks = new Map<string, Deck>();
+  const notImplemented = () => Promise.reject(new Error("not implemented in fakeAdapter"));
+  return {
+    kind: "indexeddb",
+    isAttached: () => true,
+    attach: () => Promise.resolve(true),
+    restore: () => Promise.resolve(true),
+    detach: () => Promise.resolve(),
+    listSongs: notImplemented,
+    readSong: notImplemented,
+    writeSong: notImplemented,
+    deleteSong: notImplemented,
+    resolveAudio: notImplemented,
+    readAsset: notImplemented,
+    writeAsset: notImplemented,
+    async listDecks() {
+      return [...decks.values()].map(
+        (d): DeckSummary => ({
+          id: d.id,
+          title: d.title,
+          slideCount: d.slides.length,
+          hasAudio: d.audio !== undefined,
+          updatedAt: d.updatedAt,
+        }),
+      );
+    },
+    async readDeck(id) {
+      const deck = decks.get(id);
+      if (!deck) throw new Error(`no such deck: ${id}`);
+      return deck;
+    },
+    async writeDeck(deck) {
+      decks.set(deck.id, deck);
+      return deck;
+    },
+    deleteDeck: notImplemented,
+    readDeckAsset: notImplemented,
+    writeDeckAsset: () => Promise.resolve(),
+    resolveDeckMedia: notImplemented,
+  };
+}
+
+function chordResult(overrides: Partial<ChordResult> = {}): ChordResult {
+  return {
+    source: {
+      id: "1",
+      title: "Viva La Vida",
+      artist: "Coldplay",
+      url: "https://tabs.ultimate-guitar.com/example",
+      official: true,
+      version: 1,
+      views: 100000,
+    },
+    retrievedAt: "2026-01-01T00:00:00.000Z",
+    selection: "official",
+    warning: null,
+    capo: null,
+    tuning: null,
+    key: null,
+    lines: [{ section: "Verse 1", sourceLine: 0, chords: ["G", "D"], row: "G   D", lyric: "hello darkness my old friend" }],
+    uniqueChords: ["G", "D"],
+    chart: "",
+    ...overrides,
+  };
+}
+
+describe("createDeckFromChords", () => {
+  const song = () => new File(["x"], "song.mp3", { type: "audio/mpeg" });
+
+  beforeEach(() => {
+    useDeckStore.setState({ adapter: fakeAdapter(), deck: null, decks: [], error: null });
+    vi.mocked(cuesForAudio).mockReset();
+  });
+
+  it("saves a deck already synced to the song: audio attached, every slide cued", async () => {
+    // Cover + the single "Verse 1" section = 2 slides.
+    vi.mocked(cuesForAudio).mockResolvedValue({ times: [0, 12.5], source: "lyrics" });
+    await useDeckStore.getState().createDeckFromChords(chordResult(), song());
+
+    const { deck, error } = useDeckStore.getState();
+    expect(error).toBeNull();
+    expect(deck!.title).toBe("Viva La Vida — Coldplay");
+    expect(deck!.audio?.path).toBe("audio.mp3");
+    expect(deck!.audio?.originalName).toBe("song.mp3");
+    expect(deck!.slides.map((s) => s.startTime)).toEqual([0, 12.5]);
+    // The timing is given each section's name, chord-line count and lyrics — in slide order.
+    expect(vi.mocked(cuesForAudio).mock.calls[0]![1]).toEqual([
+      { name: "Title", lines: 0, lyrics: [] },
+      { name: "Verse 1", lines: 1, lyrics: ["hello darkness my old friend"] },
+    ]);
+  });
+
+  it("leaves slides uncued when the audio has fewer parts than the deck has slides", async () => {
+    vi.mocked(cuesForAudio).mockResolvedValue({ times: [0, undefined], source: "lyrics" });
+    await useDeckStore.getState().createDeckFromChords(chordResult(), song());
+    expect(useDeckStore.getState().deck!.slides.map((s) => s.startTime)).toEqual([0, undefined]);
+  });
+
+  it("still creates the deck, uncued, and reports it when the analysis fails", async () => {
+    vi.mocked(cuesForAudio).mockRejectedValue(new Error("Unable to decode audio data"));
+    await useDeckStore.getState().createDeckFromChords(chordResult(), song());
+
+    const { deck, error } = useDeckStore.getState();
+    expect(deck).not.toBeNull();
+    expect(deck!.audio?.originalName).toBe("song.mp3");
+    expect(deck!.slides.every((s) => s.startTime === undefined)).toBe(true);
+    expect(error).toContain("Auto-suggest cues");
+  });
+
+  it("keeps the music-only cues but says so when the lyric timing was unavailable", async () => {
+    vi.mocked(cuesForAudio).mockResolvedValue({ times: [0, 9], source: "music", note: "The local service is not running" });
+    await useDeckStore.getState().createDeckFromChords(chordResult(), song());
+    const { deck, error } = useDeckStore.getState();
+    expect(deck!.slides.map((s) => s.startTime)).toEqual([0, 9]);
+    expect(error).toContain("music alone");
+  });
+
+  it("lists the new deck in the library after creating it", async () => {
+    vi.mocked(cuesForAudio).mockResolvedValue({ times: [0, 10], source: "lyrics" });
+    await useDeckStore.getState().createDeckFromChords(chordResult(), song());
+    expect(useDeckStore.getState().decks.map((d) => d.title)).toContain("Viva La Vida — Coldplay");
+  });
+});
+
+describe("setSlideCues", () => {
+  function openSlides(n: number) {
+    const deck = newDeck({ id: crypto.randomUUID(), title: "T" });
+    const slides: Slide[] = Array.from({ length: n }, (_, i) => ({
+      id: crypto.randomUUID(),
+      name: `S${i}`,
+      layout: "blank",
+      elements: [],
+    }));
+    useDeckStore.setState({ deck: { ...deck, slides }, past: [], future: [] });
+  }
+  const cues = () => useDeckStore.getState().deck!.slides.map((s) => s.startTime);
+
+  it("sets every cue as one undo step", () => {
+    openSlides(3);
+    const ok = useDeckStore.getState().setSlideCues([
+      { index: 0, seconds: 0 },
+      { index: 1, seconds: 12 },
+      { index: 2, seconds: 24 },
+    ]);
+    expect(ok).toBe(true);
+    expect(cues()).toEqual([0, 12, 24]);
+    expect(useDeckStore.getState().past).toHaveLength(1);
+
+    useDeckStore.getState().undo();
+    expect(cues()).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("refuses a batch that would run backwards and changes nothing", () => {
+    openSlides(2);
+    const ok = useDeckStore.getState().setSlideCues([
+      { index: 0, seconds: 30 },
+      { index: 1, seconds: 10 },
+    ]);
+    expect(ok).toBe(false);
+    expect(cues()).toEqual([undefined, undefined]);
+    expect(useDeckStore.getState().past).toHaveLength(0);
+  });
+
+  it("can clear cues by passing undefined", () => {
+    openSlides(2);
+    useDeckStore.getState().setSlideCues([{ index: 0, seconds: 0 }, { index: 1, seconds: 5 }]);
+    useDeckStore.getState().setSlideCues([{ index: 1, seconds: undefined }]);
+    expect(cues()).toEqual([0, undefined]);
   });
 });

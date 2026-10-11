@@ -17,8 +17,9 @@ import { initialStemState, sortStems, type StemState } from "../audio/mix.js";
 import { applyLayout, layoutById } from "../deck/templates.js";
 import { alignedFrame, boundsOf, slideBounds, type AlignMode } from "../deck/geometry.js";
 import { bundleFilename, downloadBlob, exportDeckBundle, readDeckBundle } from "../deck/bundle.js";
-import { applyOps } from "../agent/apply.js";
-import type { Op } from "../agent/ops.js";
+import { chordDeckSlides, chordSectionPlan } from "../deck/fromChords.js";
+import { cuesForAudio } from "../audio/autoCue.js";
+import type { ChordResult } from "../ug/types.js";
 import {
   sharedLibraryAdapter,
   isAnyLibrarySupported,
@@ -114,6 +115,12 @@ interface DeckState {
   detach(): Promise<void>;
   refreshDecks(): Promise<void>;
   createDeck(title: string): Promise<void>;
+  /** Builds a deck from an Ultimate Guitar chord chart (one slide per section) and opens it. The MP3 is required: the slides are cued to it by audio analysis before the deck is saved. If the analysis fails the deck is still created, uncued, and `error` says so. */
+  createDeckFromChords(
+    result: ChordResult,
+    audio: File,
+    onProgress?: (fraction: number) => void,
+  ): Promise<void>;
   openDeck(id: string): Promise<void>;
   closeDeck(): void;
   deleteDeck(id: string): Promise<void>;
@@ -164,6 +171,8 @@ interface DeckState {
   setSlideLayout(index: number, layout: LayoutId): void;
   updateSlide(index: number, updater: (s: Slide) => Slide): void;
   setSlideCue(index: number, seconds: number | undefined): void;
+  /** Sets several cues as ONE undo step. Returns false (and changes nothing) if the result wouldn't run forward. */
+  setSlideCues(cues: Array<{ index: number; seconds: number | undefined }>): boolean;
 
   // elements
   /** Replaces the selection. `null` clears it. */
@@ -206,16 +215,6 @@ interface DeckState {
   setZoom(zoom: number | "fit"): void;
   toggleGrid(): void;
   toggleSnap(): void;
-
-  /**
-   * Applies a whole agent batch as ONE undo step.
-   *
-   * Every other action here commits a single mutation, so driving them in a
-   * loop would turn one instruction into N undo entries and N re-renders —
-   * and `addSlide` additionally moves the selection each call. `applyOps` is
-   * a pure transform over the entire batch, so this stays one snapshot.
-   */
-  applyAgentOps(ops: readonly Op[]): void;
 
   undo(): void;
   redo(): void;
@@ -329,6 +328,50 @@ export const useDeckStore = create<DeckState>((set, get) => {
         const saved = await get().adapter.writeDeck({ ...draft, slides: [firstSlide] });
         await get().refreshDecks();
         await get().openDeck(saved.id);
+      } catch (err) {
+        set({ error: messageOf(err) });
+      }
+    },
+
+    async createDeckFromChords(result, audioFile, onProgress) {
+      set({ error: null });
+      try {
+        const draft = newDeck({
+          id: crypto.randomUUID(),
+          title: `${result.source.title} — ${result.source.artist}`,
+        });
+        let slides = chordDeckSlides(result, () => crypto.randomUUID());
+        const adapter = get().adapter;
+
+        // Cue the slides to the song before anything is saved, so the deck is
+        // written once, already synced. A failed analysis must not lose the
+        // deck: it is created uncued and the teacher can retry from the Music
+        // sync panel's "Auto-suggest cues".
+        let syncError: string | null = null;
+        try {
+          const { times, source, note } = await cuesForAudio(audioFile, chordSectionPlan(result), { onProgress });
+          slides = slides.map((slide, i) => (times[i] === undefined ? slide : { ...slide, startTime: times[i] }));
+          if (source === "music" && note) {
+            syncError = `Timed from the music alone — ${note}. It is rougher; check the cues by ear.`;
+          }
+        } catch (err) {
+          syncError = `Couldn't sync the slides to the music (${messageOf(err)}). Use "Auto-suggest cues" in the Music sync panel to retry.`;
+        }
+
+        // The audio file is written before the deck, so deck.json never
+        // references a file that isn't on disk yet (same order as importDeck).
+        const ext = audioFile.name.includes(".") ? audioFile.name.split(".").pop()! : "mp3";
+        const path = `audio.${ext}`;
+        await adapter.writeDeckAsset(draft.id, path, audioFile);
+
+        const saved = await adapter.writeDeck({
+          ...draft,
+          slides,
+          audio: { path, originalName: audioFile.name },
+        });
+        await get().refreshDecks();
+        await get().openDeck(saved.id);
+        if (syncError) set({ error: syncError });
       } catch (err) {
         set({ error: messageOf(err) });
       }
@@ -634,6 +677,25 @@ export const useDeckStore = create<DeckState>((set, get) => {
       commitSlide(index, (slide) => ({ ...slide, startTime: seconds }));
     },
 
+    setSlideCues(cues) {
+      const deck = get().deck;
+      if (!deck) return false;
+      const byIndex = new Map(cues.map((c) => [c.index, c.seconds]));
+      const slides = deck.slides.map((slide, i) =>
+        byIndex.has(i) ? { ...slide, startTime: byIndex.get(i) } : slide,
+      );
+      // Cues must run forward (Deck.superRefine); refuse a batch that would
+      // fail on save instead of committing it and finding out then.
+      let last = -1;
+      for (const slide of slides) {
+        if (slide.startTime === undefined) continue;
+        if (slide.startTime < last) return false;
+        last = slide.startTime;
+      }
+      commit((d) => ({ ...d, slides }));
+      return true;
+    },
+
     // ── elements ─────────────────────────────────────────────────────────
 
     selectElement(id) {
@@ -866,22 +928,6 @@ export const useDeckStore = create<DeckState>((set, get) => {
 
     toggleSnap() {
       set({ snapEnabled: !get().snapEnabled });
-    },
-
-    // ── agent ────────────────────────────────────────────────────────────
-
-    applyAgentOps(ops) {
-      if (ops.length === 0) return;
-      const { currentSlide } = get();
-      commit((deck) => applyOps(deck, ops, currentSlide).deck);
-      // Selection may now point past the end (ops can delete slides), and any
-      // in-progress inline edit refers to an element that may no longer exist.
-      const slides = get().deck?.slides.length ?? 0;
-      set({
-        currentSlide: Math.max(0, Math.min(get().currentSlide, slides - 1)),
-        selectedElementIds: [],
-        editingElementId: null,
-      });
     },
 
     // ── history ──────────────────────────────────────────────────────────

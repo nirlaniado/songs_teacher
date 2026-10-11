@@ -3,6 +3,7 @@ import { buildCues, formatCue, parseCue, slideIndexAt } from "../../schema/deck.
 import { resolveGains } from "../../audio/mix.js";
 import { useDeckPlayer } from "../../audio/useDeckPlayer.js";
 import { useDeckStore } from "../../store/deckStore.js";
+import { AutoSuggestCues } from "./AutoSuggestCues.js";
 import { SeparateStems } from "./SeparateStems.js";
 import { StemMixer } from "./StemMixer.js";
 
@@ -246,6 +247,7 @@ export function TimingPanel() {
 
       {/* Each renders only when relevant: the offer to separate when there
           are no stems yet, the mixer once there are. */}
+      <AutoSuggestCues />
       <SeparateStems />
       <StemMixer />
     </div>

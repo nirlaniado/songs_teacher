@@ -1,20 +1,57 @@
-# libre-off
+# songs-teacher
 
-**A presentation editor whose slides follow the music.** Build a deck the way you would in
-LibreOffice Impress, attach a song, and cue each slide to a timestamp — intro slide at
-0:00, first verse at 1:20, chorus at 2:22. Press Present and the track plays while the
-deck advances itself, so a music teacher can talk over a "song presentation" instead of
-clicking through it.
+**A presentation editor whose slides follow the music.** Build slides, attach an MP3, and
+cue each slide to a moment in the song (intro at 0:00, verse at 1:20, chorus at 2:22).
+Press Present and the track plays while the deck advances itself — built for music
+teachers who want to talk over a song instead of clicking through it.
 
-Also included, from the project's earlier life: a song-study mode for marking sections of
-a track and writing harmonic analysis, plus a graph that links songs by shared chord
-progressions. It still works and is reachable from the start screen.
+Optional extras: an Ultimate Guitar agent that fetches a song's chords and turns them into
+a deck, in-browser stem separation (mute vocals, solo bass), and a song-study mode.
 
-Musical analysis is authored by hand — nothing here detects chords or infers keys. Audio
-is only ever played, never acquired: songs are local files you already have, never
-downloaded, ripped, or transcoded from a streaming service.
+## Quick start
 
-Runs via Vite in every major browser (Chrome, Edge, Brave, Firefox, Safari).
+```bash
+npm install
+npm run dev
+```
+
+Open the address Vite prints (usually http://localhost:5173), then choose a folder to keep
+your presentations in.
+
+**With the Ultimate Guitar chord agent** (needs the credentials listed below):
+
+```bash
+npm install
+npm run ug:install-browser
+npm run dev:agent
+```
+
+**Other commands**
+
+```bash
+npm test             # unit tests
+npm run typecheck
+npm run build        # typecheck + production build
+```
+
+## What you need
+
+| For | You need |
+|---|---|
+| The editor | Node.js 22+ and a modern browser. Chrome/Edge/Brave store real files in a folder; Firefox/Safari keep work in browser storage. |
+| Music sync | An MP3 you already have. The app plays audio; it never downloads it from YouTube or Spotify. The automatic sync sends the MP3 (audio only) to OpenAI for a transcript, using the chord agent's `OPENAI_API_KEY`; without it the slides are timed from the music alone. |
+| Chord agent (optional) | An OpenAI API key with access to `gpt-5.4-mini`, and your Ultimate Guitar username and password, in a `.env` file (see below). |
+| Stem separation (optional) | A ~172MB model, downloaded once on first use, plus several minutes of CPU per song. Nothing is uploaded. |
+
+`.env` (only for the chord agent — copy `.env.example` and never overwrite an existing one):
+
+```dotenv
+OPENAI_API_KEY=your-key
+ULTIMATE_GUITAR_USERNAME=your-username
+ULTIMATE_GUITAR_PASSWORD=your-password
+```
+
+## Project layout
 
 ```
 src/
@@ -37,26 +74,16 @@ src/
 │   └── index.ts        sharedLibraryAdapter() — one instance for the whole app
 ├── store/            Zustand state, kept out of React's render tree
 │   ├── deckStore.ts    ★ the editor: deck/slide/element mutations + undo/redo
-│   ├── agentStore.ts   assistant transcript + pending plan (never edits directly)
 │   ├── playerStore.ts  song-study playback clock, ticked by rAF
 │   ├── libraryStore.ts song-study library
 │   └── graphStore.ts   builds the harmonic graph on demand
-├── agent/            the assistant — one op vocabulary, several producers
-│   ├── ops.ts          ★ THE CONTRACT: Op + Target unions (Zod)
-│   ├── targets.ts      resolveTarget() — which slides an op acts on
-│   ├── apply.ts        applyOps() pure batch transform + validateOps() dry run
-│   ├── describe.ts     Op -> the sentence shown in the preview
-│   ├── prompt.ts       system prompt + JSON Schema for model providers
-│   ├── parse/          sections.ts (vocabulary) + grammar.ts (the parser)
-│   └── providers/      deterministic (default) · openaiCompatible (any
-│                       OpenAI-style endpoint, reads .env) · codexCli (desktop)
 ├── components/
 │   ├── DeckLibraryScreen.tsx   start screen
 │   ├── DeckScreen.tsx          the editor window + Focus mode (full-screen editing)
 │   ├── deck/                   SlideRenderer, SlideCanvas (multi-select, snapping,
 │   │                           marquee, rotate), CanvasContextMenu, SlidePanel,
 │   │                           EditorToolbar, PropertiesPanel, TimingPanel,
-│   │                           PresentMode, AgentPanel, StemMixer, SeparateStems,
+│   │                           PresentMode, StemMixer, SeparateStems,
 │   │                           useDeckAssets, useFullscreen
 │   └── …                       song-study screens (Waveform, SongScreen, …)
 ├── audio/            playback + separation
@@ -71,20 +98,85 @@ src/
 ├── graph/            harmonic index — pure, rebuilt on demand, nothing persisted
 └── example/
     └── song.example.json
-
-mcp/                  Node-only MCP server — build decks from the CLI
-├── library.ts        fs deck I/O: atomic writes + per-deck write serialization
-└── server.ts         stdio server; apply_ops takes the same Op vocabulary
 ```
 
-```bash
-npm install
-npm run dev        # vite dev server
-npm test           # 328 tests
-npm run typecheck
-npm run build      # typecheck + production build
-npm run mcp:build  # compile the MCP server (see "From the CLI, via MCP")
-```
+## Ultimate Guitar chord agent
+
+The **סוכן אקורדים · Ultimate Guitar** button is available on the start screen,
+even before opening a library. The agent uses your Ultimate Guitar account as its
+only chord source. GPT-5.4 mini identifies the song and calls a constrained search
+tool; local TypeScript code chooses the version and extracts the actual chart.
+Credentials and chart content are never sent to the model. Only the user's song
+request is sent to OpenAI for the search; the MP3 is sent (audio only) when you create a
+presentation, for a transcript (see below). API usage is billed separately from the UG subscription.
+
+Setup is in **Quick start** and **What you need** above. Optionally set
+`UG_AGENT_MODEL=gpt-5.4-mini` and `UG_TRANSCRIBE_MODEL=whisper-1` in `.env` to choose the models.
+
+Once a chart is found, choose the song's MP3 (required) and press **Create Presentation**. It
+builds a deck — a title slide plus one slide per song section, with the chords over their lyrics
+in a monospace block — and syncs it to the song in the same step. Needs a library folder open
+first.
+
+**How the sync works.** The agent keeps each section's lyrics from the chart. When you press
+**Create Presentation**, the MP3 is sent (audio only) through your local agent service to OpenAI,
+which returns a timestamped transcript of the singing. Your chart's lyrics are then matched to
+that transcript *on your machine* — nothing about the chart is sent. Each section starts where
+its lyrics are found, in song order (so a repeated chorus lands on its own repeat), and the time
+is snapped to the nearest real change in the music. Instrumental sections have no words to find:
+an **Intro** takes over from the title slide after a 3-second hold, and a solo or outro starts
+where the singing before it ends. This uses your `OPENAI_API_KEY` and costs a small amount per
+song; the audio is sent as 16 kHz mono, which keeps a song under OpenAI's 25 MB limit.
+
+If the transcript can't be made (service down, quota, an instrumental) or too few sections are
+found in it, the slides are timed from the music alone (where the harmony changes), and you are
+told. That is rougher. Either way it is a starting point: a recording that differs from the chart
+(a skipped bridge, an extra chorus), or one Whisper mishears badly, can still land wrong. Check by
+ear and fix any cue with **Set** in the **Music sync** panel. **Auto-suggest cues** there re-times
+from the music alone (a deck doesn't keep the chart's lyrics apart from the slides' text); one
+Ctrl+Z undoes the whole batch. If the sync fails entirely, the deck is still created with the MP3
+attached and no cues.
+
+Open the Vite address shown in the terminal, then the chord agent. Example input:
+`VIVA LA VIDA — COLDPALY`. Alternatively run `npm run ug:server` and `npm run dev`
+in separate terminals. Restart the agent after changing its code or `.env`.
+The Vite dev/preview server proxies `/api/ug` to the loopback-only service on 4318;
+this personal account service is not designed for public deployment.
+
+The browser signs in once and keeps its session in `.ug-agent/profile`. On a desktop
+it opens a visible window; on Linux without a display it defaults to headless.
+For a CAPTCHA or extra authentication, run with `UG_HEADLESS=false` on a machine
+with a display, finish the site's prompt, then press **השלמתי התחברות — המשך**.
+Do not run two agents against the same profile simultaneously.
+
+Selection and provenance:
+
+- Search all result pages (up to 10; broader searches stop with an explicit error).
+  Match title and artist, deduplicate marketing rows by their linked Official ID.
+- Prefer a version explicitly marked Official. For an authenticated Official tab,
+  click the site's **Chords** toggle and extract only named chord spans inside the
+  chart. A failure does not silently fall back to community content.
+- When no Official result exists, inspect each matching Chords page and compare
+  `tab_view.stats.view_total`. Votes and star ratings are not view counts. An
+  Official link discovered on a community page takes precedence too.
+- Missing view counts, ties, multiple Official versions, or ambiguous song matches
+  prompt a choice. Network errors and incomplete searches stop the lookup.
+- Every community result carries a visible Hebrew warning that it is unofficial
+  and may contain inaccuracies. Results include source URL, version, views, selection
+  reason, retrieval time, capo/tuning/key when available, sections and chord order.
+
+Charts keep the lyrics under each chord line (the ones on the page your account opens), preserve
+source chord order/repetitions, and can be copied or downloaded as JSON. Results are also written atomically to `.ug-agent/results/<id>.json`.
+Each new lookup rechecks the site; saved results are an archive, not proof of current
+popularity. All `.ug-agent` contents are ignored by Git. Treat the profile as a secret;
+it contains your logged-in session. No passwords, cookies, or raw provider errors are
+returned through the local API. Never put API keys in `VITE_*` variables.
+
+Site markup can change. The extractor fails explicitly when it cannot verify the
+source or read chord notation; it does not infer chords from audio or score images.
+Initial live verification covered the authenticated Official chord view for
+Coldplay's Viva La Vida. Automated tests also cover selection, missing statistics,
+source mismatches, login recovery, and failures without unofficial substitution.
 
 ## Making a song presentation
 
@@ -145,7 +237,7 @@ you've typed is ever unreachable.
 **Focus mode** (the `⛶ Focus` button, or Ctrl+Shift+F) goes full-screen with the app chrome
 and the music panel dropped, for building slides when timing isn't the job — useful on a
 small screen or just to get the canvas as large as possible. The slide rail, properties
-panel and assistant each have their own toggle inside focus mode, so you can strip down to
+panel and music panel each have their own toggle inside focus mode, so you can strip down to
 canvas-only. Exit with the button or Esc; the music panel comes back the way you left it.
 
 ### Tabs
@@ -193,9 +285,6 @@ themselves), so it can't also stand for "bend" in the same line without being am
 The font is fixed to monospace and doesn't wrap, because a tab diagram is an ASCII grid —
 a proportional font or a rewrapped line breaks the vertical alignment between the strings,
 so make the box wide enough to hold your longest line rather than relying on wrapping.
-
-The assistant can see a tab element in the deck (so it won't mistake one for a shape) but
-can't create, edit or style one — same reasoning as it never writing lyrics or chords.
 
 ## Stems — playing part of the mix
 
@@ -245,235 +334,13 @@ regenerated by separating again. You're asked at download time, and if you leave
 the stem references are stripped too, so the imported deck never points at audio that
 isn't in the file.
 
-## The assistant
-
-Open **✨ Assistant** in the editor and type an instruction instead of clicking:
-
-```
-create intro verse1 pre hook chorus verse2 bridge chorus verse3
-add chords C D E F to verses 1 2 3
-cue the chorus at 2:22
-make the intro a centered title
-```
-
-It proposes changes; you read them and press Apply. The whole batch lands as **one** undo
-step, so a wrong guess costs one Ctrl+Z. Plan lines name the slides they actually resolved
-to ("Verse 1, Verse 2, Verse 3"), which is how you catch a misread target *before* it
-happens rather than after.
-
-### Pasting a whole song's worth of content
-
-Paste section-tagged text straight into the assistant and it distributes it across slides,
-creating any that don't exist yet:
-
-```
-[Intro]
-your text here
-
-[Verse 1]
-your text here
-
-[Chorus]
-your text here
-```
-
-Each block fills the slide of that name, or makes one. Shift+Enter for a newline inside
-the box; Enter sends.
-
-### Song details
-
-Ask for a song's details and it looks them up rather than guessing:
-
-```
-add the metadata for Some Song by Some Band to the title slide
-```
-
-With a language model configured (see "Two engines" below), the model itself decides it
-needs a lookup and asks for one — reading past typos, filler words and destination clauses
-("...to the title slide") to work out the actual song. The store then searches Genius and
-resumes the model with what it found, in one of three ways:
-
-- **A confident match** — the model gets the facts and writes them, no interruption.
-- **Only weak matches** — Genius returned something, but nothing the scorer trusts (it
-  indexes user collection pages as songs, so blindly taking the top hit once put a
-  stranger's music-collection page on a title slide). You're shown the candidates and pick
-  one, or say **None of these**.
-- **Nothing at all** — the model is told the search failed and answers honestly instead of
-  inventing details. It previously filled slides with placeholder text like
-  `(song name) metadata`; that's now explicitly forbidden.
-
-Without a model configured, the same request is handled by pattern-matching in
-`src/agent/lookup.ts` instead — it extracts a query from common phrasings and does one
-direct lookup, without the candidate picker (a match either clears the confidence bar or
-it doesn't).
-
-Either way it fetches title, artist, album and year from Genius. Needs
-`GENIUS_ACCESS_TOKEN` in `.env` (free from
-[genius.com/api-clients](https://genius.com/api-clients) — the *Client Access Token*),
-then a dev-server restart.
-
-The browser can't call Genius directly: the required `Authorization` header triggers a
-CORS preflight that Genius answers with 403, which surfaces as a bare "Failed to fetch".
-Requests therefore go through a dev-server proxy (`/api/genius`, see `vite.config.ts`),
-which makes them same-origin. A useful side effect: the token is injected server-side and
-**never enters the browser bundle**, unlike the OpenAI key.
-
-Metadata only — Genius has no lyrics endpoint. For lyrics, paste them yourself using the
-`[Section]` blocks above.
-
-**The assistant never supplies the words.** It has no internet access and is explicitly
-instructed not to produce lyrics, chords or analysis of its own — it only lays out text
-you give it. Bring lyrics from a source you're entitled to use.
-
-### Two engines
-
-**Built-in parser** (default, always on). Free, instant, offline, no account. Understands
-the documented command shapes above — and *only* those. It will not handle typos or
-several requests in one sentence.
-
-**Language model** (optional, ⚙ in the panel). Handles free-form phrasing, misspellings
-and compound instructions like *"create verse 1 slide the pre hook then chrus, in the
-intro add key f#m"* — three requests and a typo, which no regex grammar will ever parse.
-It receives a toolbook of every operation the editor supports and returns a plan in the
-same format the parser does.
-
-**Setup with an OpenAI key:**
-
-```bash
-cp .env.example .env      # then paste your key into VITE_OPENAI_API_KEY
-npm run dev               # restart if it was already running
-```
-
-That's it — the assistant picks the key up automatically and the ⚙ panel confirms it's
-using `.env`. Keys entered through ⚙ instead are stored in that browser only and take
-precedence over `.env`; **Reset** there clears the override and falls back to the file.
-
-> **`.env` is not a secret store.** Vite substitutes `VITE_*` variables into the JavaScript
-> bundle at build time, so the key ends up as a literal string in the shipped files and is
-> readable by anyone who opens devtools. That's fine for running locally, which is what
-> this app is for. `.env` is gitignored.
->
-> There is no way around this in a browser — obfuscating or encrypting the key doesn't
-> help, because the code that unwraps it also ships to the browser. A key that reaches a
-> browser is readable by whoever is at that browser. The only real fixes are: each user
-> supplies their own key (⚙, stays in their browser), or a server holds the key and the
-> browser calls that instead — and a proxy without auth and spend caps just leaks your
-> credits more slowly.
->
-> **`npm run build` therefore refuses to run while a real key is in `.env`**, so a stray
-> build can't be published with your key inside it. Remove the key and rebuild to publish;
-> use `ALLOW_BUNDLED_KEY=1 npm run build` when you deliberately want a local-only
-> production bundle. `npm run dev` is unaffected.
-
-Point it at any OpenAI-compatible endpoint, which is what puts the cost decision in your
-hands:
-
-| Endpoint | Cost | Notes |
-|---|---|---|
-| **Ollama / LM Studio** on localhost | Free | Runs on your machine, works offline, no account. Ollama needs `OLLAMA_ORIGINS` set to allow the page's origin. |
-| **Groq** | Free tier | Your own key. |
-| **OpenAI** | You pay per use | Your own key. |
-
-Your key is sent nowhere but the endpoint you chose. The parser always runs first, so
-anything it understands never reaches a model — and never costs anything.
-
-### From the CLI, via MCP
-
-An MCP server exposes the same editing operations to Claude Code, Codex, or any MCP
-client, so you can build decks from a terminal against the same library folder the editor
-uses.
-
-```bash
-npm run mcp:build      # compiles the server to dist-mcp/
-```
-
-Then register it. **Claude Code** — `.mcp.json` in your project, or `claude mcp add`:
-
-```json
-{
-  "mcpServers": {
-    "libre-off": {
-      "command": "node",
-      "args": ["/absolute/path/to/libre_off/dist-mcp/mcp/server.js",
-               "--library", "/absolute/path/to/your/library"]
-    }
-  }
-}
-```
-
-**Codex** — the equivalent block in `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.libre-off]
-command = "node"
-args = ["/absolute/path/to/libre_off/dist-mcp/mcp/server.js",
-        "--library", "/absolute/path/to/your/library"]
-```
-
-The library path is the folder you opened in libre-off — the one containing `decks/`.
-`LIBRE_OFF_LIBRARY` works instead of `--library` if you prefer an env var.
-
-**Tools:** `list_decks`, `read_deck`, `describe_capabilities`, `create_deck`, `apply_ops`
-(with `dryRun`), `delete_deck`.
-
-`apply_ops` takes the exact same `Op` vocabulary the in-app assistant uses, runs it through
-the same pure `applyOps` transform, and validates against the same `Deck` schema — a third
-producer of one contract rather than a parallel implementation. A deck built from the CLI
-is indistinguishable from one built by hand, and no capability can drift between them.
-
-Two caveats. **Only real-folder libraries work** — an IndexedDB library (the Firefox/Safari
-fallback) lives inside the browser and is unreachable from a terminal. And **there is no
-undo on disk**: the editor's Ctrl+Z only covers the running session, so use `dryRun` first
-when a plan is large. Reload the deck in the editor to see CLI changes.
-
-### What it can change
-
-Structure (create / rename / reorder / delete slides, layouts), content (titles, body
-text, speaker notes), cues (`cue the chorus at 2:22`), and design (deck theme, per-slide
-background colours, text size / weight / alignment / colour). Images and element
-positioning stay manual.
-
-**It operates the app; it does not analyse music.** Chords and lyrics are placed exactly as
-you type them — nothing infers a key, a progression, or a song structure. That's the same
-hand-authored rule the rest of the project follows.
-
-### Why there's no "sign in with ChatGPT" button
-
-The obvious idea — OAuth into ChatGPT so the assistant is free — doesn't work, and it's
-worth writing down so it isn't attempted again:
-
-- **"Sign in with ChatGPT" is an identity provider.** It returns name, email and profile
-  picture. It grants no inference.
-- **Subscription-backed model calls are first-party**: Codex CLI, the IDE extension, Codex
-  Cloud. Asked directly whether a third-party client may do the same, OpenAI confirmed the
-  *code* is Apache-2.0 but pointed at the standard terms and gave no approval — and those
-  terms restrict accessing the service by automated or programmatic means.
-- So libre-off **never reimplements that OAuth flow**. It would mean presenting OpenAI's
-  first-party client credentials from a client that isn't theirs, it breaks the moment they
-  rotate a client id, and the exposure lands on the *user's* ChatGPT account.
-
-Instead the assistant runs a **deterministic command parser** — free, instant, offline, no
-account — which handles the documented shapes above. For anything beyond them, the provider
-interface (`src/agent/providers/`) takes a language model:
-
-- `codexCli.ts` — invokes the official Codex CLI *the user already installed and signed
-  into*. Nothing is forged: OpenAI's own client, the user's own login, their own machine,
-  and `codex exec --output-schema` returns exactly the JSON op list we need at no API cost.
-  Requires a subprocess, so it activates only in the desktop build.
-- A key-based provider can be added the same way, where the user pays their own tokens.
-
-Every provider emits the **same** op list, validated by the same schema, so preview, undo
-and the tests never learn which engine answered.
-
 ## Decisions worth not re-litigating
 
-**Why not fork LibreOffice Impress?** It was asked, and the answer is feasibility, not
-licence. LibreOffice core is MPL-2.0 and would permit reuse. But Impress is ~10M lines of
-C++ whose `sd/` module is entangled with `svx`, `editeng`, `sfx2` and `vcl` through UNO;
-it does not build standalone and has no web target. There is no "presentation module" to
-lift out of the GitHub mirror. What *is* reusable is the ODF format itself (`.odp` is a
-ZIP of XML) and headless `soffice` as a converter — both are import/export concerns, on
-the roadmap below. The editor is hand-built React that mirrors Impress's arrangement.
+**The app owns the editor.** Slide content, rendering, editing and persistence use the
+native React/TypeScript implementation. The experimental LibreOfficeKit integration has
+been retired; no LibreOffice runtime, C++ host or separate document server is required.
+Future office-format support should use the app's own document model without restoring
+that dependency.
 
 **One renderer at three scales.** `SlideRenderer` draws a slide at a fixed 1280x720; the
 editor canvas, the thumbnail rail, and fullscreen presentation mount that same component
@@ -599,9 +466,8 @@ Two implementations exist today, chosen by `createLibraryAdapter()` in
   `usingFallbackStorage` so the UI can say so plainly rather than hiding the difference.
 
 Neither can read outside the library root — absolute audio paths throw `out-of-root` by
-design (`adapters/paths.ts`, shared by both, tested). The Electron adapter is what users
-eventually get, and it additionally allows absolute audio paths and can spawn headless
-LibreOffice for ODP rendering.
+design (`adapters/paths.ts`, shared by both, tested). A future desktop adapter could
+add absolute media paths while retaining the same native editor.
 
 ## Library layout on disk
 
@@ -632,8 +498,8 @@ LibreOffice for ODP rendering.
 - No group/ungroup — multi-select and its commands (align, arrange, distribute, nudge)
   cover most of what grouping is normally for, but there's no way to save a group as a
   unit and move it as one object across edits. Would need a nested-element schema change.
-- Tab elements are placement only — no playback, no chord/fret checking, and the
-  assistant can't create or edit one yet (manual, via the toolbar's **+ Tab**).
+- Tab elements are placement only — no playback and no chord/fret checking. They are
+  added from the toolbar's **+ Tab**.
 - Dragging a rotated element still moves it along unrotated (x/y) axes, not along its own
   rotated ones.
 - Audio is whatever the browser can decode; only MP3 is verified.
@@ -641,20 +507,6 @@ LibreOffice for ODP rendering.
   file in `assets/`. Harmless but it accumulates; deleting the deck clears it.
 - Uploaded images are stored as-is — no downscaling, so a 12MP photo used as a backdrop is
   stored and decoded at full size.
-
-**Assistant**
-- Without a model configured, the built-in engine is a grammar: it understands the
-  documented command shapes and says so plainly when it doesn't. Typos and multi-part
-  sentences need a model.
-- No conversation memory. Each instruction is interpreted against the deck alone, so
-  "now do the same to the bridge" won't work; repeat the full instruction.
-- Small local models are noticeably worse at emitting valid operations than hosted ones.
-  If a plan looks wrong, that's usually the model, not the parser — the reply is schema-
-  validated, so a bad one is rejected rather than applied.
-- Image backdrops and element positioning aren't in the op vocabulary. A model can't
-  upload a file, so those stay in the properties panel.
-- The Codex provider is written but inert until the desktop build exists — a browser tab
-  can't spawn a subprocess. `available()` returns false and it never appears in the panel.
 
 **Song-study mode**
 - `text` blocks render as plain text, not GFM markdown.
@@ -665,9 +517,11 @@ LibreOffice for ODP rendering.
 - Songs migrated from the removed YouTube source have no audio. They open and keep their
   sections and analysis, but can't play until a local file is attached.
 
-## Next
+## Product direction and next steps
 
-1. Presenter view — speaker notes and next-slide preview on a second screen.
-2. ODF export, then import (`.odp` is a ZIP of XML).
-3. PDF export — likely a print stylesheet over `SlideRenderer`.
-4. Electron adapter: absolute media paths, a `better-sqlite3`-backed graph index.
+The native editor, document schema and playback engine are the foundation. Everything on
+a slide is authored by the user; the chord lookup agent is separate from slide editing
+and does not generate or modify presentations.
+
+Editor work to consider next: presenter view, richer text and grouping, and export/import
+implemented around the native document model. Detailed priority is still to be decided.

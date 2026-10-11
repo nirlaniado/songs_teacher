@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useDeckStore } from "../store/deckStore.js";
-import { useAgentStore } from "../store/agentStore.js";
-import { AgentPanel } from "./deck/AgentPanel.js";
 import { EditorToolbar } from "./deck/EditorToolbar.js";
 import { PresentMode } from "./deck/PresentMode.js";
 import { PropertiesPanel } from "./deck/PropertiesPanel.js";
@@ -33,8 +31,6 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
   const undo = useDeckStore((s) => s.undo);
   const redo = useDeckStore((s) => s.redo);
 
-  const agentOpen = useAgentStore((s) => s.open);
-  const toggleAgent = useAgentStore((s) => s.toggle);
 
   const [presenting, setPresenting] = useState(false);
   const [showTiming, setShowTiming] = useState(true);
@@ -156,14 +152,6 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           >
             ⛶ Focus
           </button>
-          <button
-            onClick={toggleAgent}
-            className={`rounded px-2 py-0.5 text-xs ${
-              agentOpen ? "bg-sky-700 text-white" : "text-neutral-500 hover:text-neutral-300"
-            }`}
-          >
-            ✨ Assistant
-          </button>
         </div>
       )}
 
@@ -180,14 +168,6 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             </button>
             <button onClick={() => setShowProperties((v) => !v)} className={chip(showProperties)}>
               Properties
-            </button>
-            <button
-              onClick={toggleAgent}
-              className={`rounded px-2 py-0.5 text-xs ${
-                agentOpen ? "bg-sky-700 text-white" : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              ✨ Assistant
             </button>
             <button onClick={() => setShowTiming((v) => !v)} className={chip(showTiming)}>
               ♪ Music sync
@@ -218,7 +198,6 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           )}
         </div>
         {showProperties && <PropertiesPanel />}
-        {agentOpen && <AgentPanel />}
       </div>
     </div>
   );

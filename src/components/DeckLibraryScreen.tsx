@@ -49,6 +49,7 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
     onOpen();
   }
 
+
   return (
     <div className="mx-auto max-w-3xl p-10">
       <div className="mb-8 flex items-baseline justify-between">
@@ -101,7 +102,7 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
           type="button"
           onClick={() => bundleInput.current?.click()}
           disabled={importing}
-          title="Open a .zip exported from libre-off"
+          title="Open a .zip exported from songs-teacher"
           className="rounded bg-neutral-800 px-4 py-2 text-sm text-neutral-200 hover:bg-neutral-700 disabled:opacity-50"
         >
           {importing ? "Importing…" : "Import…"}
