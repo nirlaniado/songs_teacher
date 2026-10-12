@@ -1,16 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { VOCAB } from "./ctcAlign.js";
 import { SAMPLES_PER_FRAME, emissionsFor, framesFor, normalize, onnxSession, planChunks, type RunSession } from "./alignModel.js";
 
-const ort = vi.hoisted(() => ({
-  inputNames: ["input_values"], outputNames: ["logits"],
-  run: vi.fn(), tensors: [] as unknown[][],
-}));
+const ort = vi.hoisted(() => {
+  const state = { inputNames: ["input_values"], outputNames: ["logits"], run: vi.fn(), tensors: [] as unknown[][], create: vi.fn() };
+  state.create.mockImplementation(async () => ({ inputNames: state.inputNames, outputNames: state.outputNames, run: state.run }));
+  return state;
+});
 vi.mock("onnxruntime-web", () => ({
-  InferenceSession: { create: vi.fn(async () => ({ inputNames: ort.inputNames, outputNames: ort.outputNames, run: ort.run })) },
-  Tensor: class { constructor(...args: unknown[]) { ort.tensors.push(args); } },
+  InferenceSession: { create: ort.create },
+  Tensor: class { dims: number[]; constructor(...args: unknown[]) { ort.tensors.push(args); this.dims = args[2] as number[]; } },
 }));
-vi.mock("./modelCache.js", () => ({ loadModelBytes: vi.fn(async () => new ArrayBuffer(8)) }));
+vi.mock("./modelCache.js", () => ({
+  loadModelBytes: vi.fn(async (_url: string, onProgress: (loaded: number, total: number) => void) => {
+    onProgress(4, 8); onProgress(8, 8);
+    return new ArrayBuffer(8);
+  }),
+}));
 
 const V = VOCAB.length;
 const SECONDS = 16_000;
@@ -134,14 +140,33 @@ describe("emissionsFor", () => {
     await expect(emissionsFor(noise(SECONDS), undefined, run)).rejects.toThrow(/expected 49/);
   });
 
-  it("reports inference progress per chunk", async () => {
+  it("reports inference progress after each chunk", async () => {
     const progress = vi.fn();
     await emissionsFor(noise(70 * SECONDS), progress, stamping().run);
-    expect(progress.mock.calls.map(([p]) => p.fraction)).toEqual([0, 1 / 3, 2 / 3, 1]);
+    expect(progress.mock.calls.map(([p]) => p.fraction)).toEqual([1 / 3, 2 / 3, 1]);
+  });
+
+  it("never moves progress backward on a first run that downloads the model", async () => {
+    ort.run.mockImplementation(async (feeds: Record<string, { dims: number[] }>) => {
+      const frames = framesFor(feeds.input_values!.dims[1]!);
+      return { logits: { data: new Float32Array(frames * V), dims: [1, frames, V] } };
+    });
+    const progress = vi.fn();
+    await emissionsFor(noise(70 * SECONDS), progress);
+    const events = progress.mock.calls.map(([p]) => p as { stage: string; fraction: number | null });
+    expect([...new Set(events.map(e => e.stage))]).toEqual(["downloading", "loading", "inferring"]);
+    const order = ["downloading", "loading", "inferring"];
+    for (let i = 1; i < events.length; i++) {
+      const [a, b] = [events[i - 1]!, events[i]!];
+      expect(order.indexOf(b.stage)).toBeGreaterThanOrEqual(order.indexOf(a.stage));
+      if (a.stage === b.stage && a.fraction !== null && b.fraction !== null) expect(b.fraction).toBeGreaterThanOrEqual(a.fraction);
+    }
+    expect(events.at(-1)).toMatchObject({ stage: "inferring", fraction: 1 });
   });
 });
 
 describe("onnxSession", () => {
+  afterEach(() => { ort.inputNames = ["input_values"]; ort.outputNames = ["logits"]; });
   it("feeds input_values and reads logits", async () => {
     ort.run.mockResolvedValue({ logits: { data: new Float32Array(2 * V), dims: [1, 2, V] } });
     const out = await onnxSession()(new Float32Array(720));
@@ -152,8 +177,21 @@ describe("onnxSession", () => {
   it("fails clearly before inference when the model's tensor names differ", async () => {
     ort.run.mockClear();
     ort.inputNames = ["input"]; ort.outputNames = ["output"];
-    await expect(onnxSession()(new Float32Array(720))).rejects.toThrow(/inputs \[input\] and outputs \[output\]; expected "input_values" → "logits"/);
+    await expect(onnxSession()(new Float32Array(720))).rejects.toThrow(/inputs \[input\] and outputs \[output\]; expected only input "input_values" and an output "logits"/);
     expect(ort.run).not.toHaveBeenCalled();
-    ort.inputNames = ["input_values"]; ort.outputNames = ["logits"];
+  });
+  it("rejects a model that requires an input besides input_values", async () => {
+    ort.inputNames = ["input_values", "attention_mask"];
+    await expect(onnxSession()(new Float32Array(720))).rejects.toThrow(/inputs \[input_values, attention_mask\].*expected only input "input_values"/);
+  });
+  it("retries opening the model after a failed download instead of caching the failure", async () => {
+    ort.run.mockResolvedValue({ logits: { data: new Float32Array(2 * V), dims: [1, 2, V] } });
+    ort.create.mockClear();
+    ort.create.mockRejectedValueOnce(new Error("network down"));
+    const run = onnxSession();
+    await expect(run(new Float32Array(720))).rejects.toThrow("network down");
+    expect((await run(new Float32Array(720))).frames).toBe(2);
+    expect((await run(new Float32Array(720))).frames).toBe(2);
+    expect(ort.create).toHaveBeenCalledTimes(2);
   });
 });
