@@ -3,7 +3,7 @@ import { z } from "zod";
 import { GuitarAgent } from "./agent.js";
 import { AgentError } from "./core.js";
 import { transcribeAudio } from "./transcribe.js";
-import { config } from "./config.js";
+import { config, serviceStatus } from "./config.js";
 
 const agent = new GuitarAgent();
 // OpenAI's transcription endpoint rejects files over 25 MB.
@@ -24,7 +24,7 @@ const server = createServer(async (req, res) => {
       return send(403, { error: "מקור הבקשה אינו מקומי." });
     const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
     if (req.method === "GET" && path === "/api/ug/status")
-      return send(200, { model: config.model, apiKeyConfigured: Boolean(config.apiKey), credentialsConfigured: Boolean(config.username && config.password), headless: config.headless });
+      return send(200, serviceStatus());
     const match = path.match(/^\/api\/ug\/jobs\/([a-f0-9-]{36})(?:\/(resume|cancel))?$/);
     if (req.method === "GET" && match && !match[2]) {
       const job = agent.get(match[1]!); return send(job ? 200 : 404, job ?? { error: "הבקשה לא נמצאה." });

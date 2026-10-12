@@ -15,3 +15,13 @@ export const config = {
   password: process.env.ULTIMATE_GUITAR_PASSWORD,
   headless: process.env.UG_HEADLESS === "true" || (process.env.UG_HEADLESS !== "false" && process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY),
 };
+
+export function serviceStatus() {
+  return {
+    model: config.model,
+    agentApiKeyConfigured: Boolean(config.agentApiKey),
+    transcribeApiKeyConfigured: Boolean(config.apiKey),
+    credentialsConfigured: Boolean(config.username && config.password),
+    headless: config.headless,
+  };
+}

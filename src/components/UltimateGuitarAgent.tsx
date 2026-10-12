@@ -55,10 +55,10 @@ export function UltimateGuitarAgent({ onBack, onDeckCreated }: { onBack: () => v
   // On entry, checks service availability and restores a previous request for this browser tab if its ID was saved.
   useEffect(() => {
     let stopped = false;
-    void request<{ apiKeyConfigured: boolean }>("status").then(status => {
+    void request<{ agentApiKeyConfigured: boolean }>("status").then(status => {
       if (stopped) return;
       setAvailable(true);
-      if (!status.apiKeyConfigured) setError("חסר OPENAI_API_KEY ב־ENV של השירות המקומי.");
+      if (!status.agentApiKeyConfigured) setError("חסר OPENROUTER_API_KEY ב־ENV של השירות המקומי.");
     }).catch(e => { if (!stopped) { setAvailable(false); setError(e.message); } });
     const saved = sessionStorage.getItem("ug-agent-job");
     if (saved) void request<AgentJob>(`jobs/${saved}`).then(j => { if (!stopped) setJob(j); }).catch(() => sessionStorage.removeItem("ug-agent-job"));

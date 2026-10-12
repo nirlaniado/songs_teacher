@@ -31,6 +31,7 @@ export async function identifySong(query: string): Promise<SongIdentity> {
     const choice = response.choices[0];
     const calls = choice?.message?.tool_calls ?? [];
     const call = calls[0];
+    // "stop" is accepted because OpenAI-compatible gateways disagree on finish_reason with tools; strictness breaks free providers.
     if (!choice || !["tool_calls", "stop"].includes(choice.finish_reason) || calls.length !== 1 || call?.type !== "function")
       throw new AgentError("model_output", "זיהוי השיר לא הושלם. נסה שם שיר ואמן מפורשים.");
     if (call.function.name === "clarify") throw new AgentError("clarification", "ציין שם שיר ואמן מדויקים כדי שהסוכן יוכל לחפש את הגרסה הנכונה.");
