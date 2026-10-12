@@ -108,16 +108,16 @@ export async function emissionsFor(
   const chunks = planChunks(samples.length);
   const input = chunks.length ? normalize(samples) : samples;
 
+  // Reported after each chunk, not before: the first run() may still be downloading and loading the model, and progress must not step back from "inferring" to "downloading".
   for (const [i, chunk] of chunks.entries()) {
-    onProgress({ stage: "inferring", fraction: i / chunks.length, detail: `chunk ${i + 1} of ${chunks.length}` });
     const out = await run(input.subarray(chunk.start, chunk.start + chunk.length));
     const expected = framesFor(chunk.length);
     if (out.frames !== expected || out.logits.length !== expected * vocabSize)
       throw new Error(`Alignment model returned ${out.frames} frames (${out.logits.length} values) for ${chunk.length} samples; expected ${expected} × ${vocabSize}.`);
     const offset = chunk.start / SAMPLES_PER_FRAME;
     logits.set(out.logits.subarray((chunk.keepFrom - offset) * vocabSize, (chunk.keepTo - offset) * vocabSize), chunk.keepFrom * vocabSize);
+    onProgress({ stage: "inferring", fraction: (i + 1) / chunks.length, detail: `chunk ${i + 1} of ${chunks.length}` });
   }
-  if (chunks.length) onProgress({ stage: "inferring", fraction: 1 });
   return { logits, frames, vocabSize, secondsPerFrame: SECONDS_PER_FRAME };
 }
 
@@ -130,13 +130,15 @@ export function onnxSession(onProgress: (p: AlignProgress) => void = () => {}, m
     const bytes = await loadModelBytes(modelUrl, (loaded, total) =>
       onProgress({ stage: "downloading", fraction: total ? loaded / total : null, detail: `${Math.round(loaded / 1e6)} / ${Math.round(total / 1e6)} MB` }));
     onProgress({ stage: "loading", fraction: null });
-    const session = await ort.InferenceSession.create(bytes, { executionProviders: ["webgpu", "wasm"], graphOptimizationLevel: "basic" });
-    if (!session.inputNames.includes(INPUT_NAME) || !session.outputNames.includes(OUTPUT_NAME))
-      throw new Error(`Alignment model has inputs [${session.inputNames.join(", ")}] and outputs [${session.outputNames.join(", ")}]; expected "${INPUT_NAME}" → "${OUTPUT_NAME}".`);
+    // WASM only: the quantized graph's DynamicQuantizeLinear/MatMulInteger nodes have no WebGPU kernels in ORT Web, so WebGPU only adds partition crossings. Benchmark before re-adding it (an fp32 override is where it might help).
+    const session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "basic" });
+    if (session.inputNames.length !== 1 || session.inputNames[0] !== INPUT_NAME || !session.outputNames.includes(OUTPUT_NAME))
+      throw new Error(`Alignment model has inputs [${session.inputNames.join(", ")}] and outputs [${session.outputNames.join(", ")}]; expected only input "${INPUT_NAME}" and an output "${OUTPUT_NAME}".`);
+    onProgress({ stage: "inferring", fraction: 0 });
     return { ort, session };
   }
   return async input => {
-    ready ??= open();
+    ready ??= open().catch(error => { ready = undefined; throw error; });
     const { ort, session } = await ready;
     const result = await session.run({ [INPUT_NAME]: new ort.Tensor("float32", input, [1, input.length]) });
     const tensor = result[OUTPUT_NAME]!;
