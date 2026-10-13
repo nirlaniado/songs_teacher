@@ -1,24 +1,27 @@
 import type { Slide } from "../schema/deck.js";
+import { ALIGN_SAMPLE_RATE, type AlignProgress, type RunSession } from "./alignModel.js";
 import { decodeMono } from "./decodeMono.js";
-import { transcribeMix } from "./llmSync.js";
-import { alignLyrics } from "./lyricSync.js";
 import { analyse, firstOnset, planCues, planFromMatches, type PlanSection } from "./segment.js";
+import { alignSections } from "./sectionAlign.js";
 
 const RATE = 22050;
 
 export interface AutoCueOptions {
   /** Separated vocals stem, if the deck has one — shows whether singing starts at once or after an intro. */
   vocals?: Blob;
-  /** Try the lyric-based timing (transcribes the audio through the local service). Default true. */
+  /** Try the lyric-based timing (aligns the lyrics to the audio in the browser). Default true. */
   useLyrics?: boolean;
   signal?: AbortSignal;
-  onProgress?: (fraction: number) => void;
+  /** 0..1, never decreasing; `detail` says what is happening when it is worth saying, e.g. the model download. */
+  onProgress?: (fraction: number, detail?: string) => void;
+  /** Alignment inference; the real model by default. */
+  run?: RunSession;
 }
 
 export interface AutoCueResult {
   /** One entry per slide; `undefined` = leave uncued. */
   times: Array<number | undefined>;
-  /** "lyrics": timed from the transcript. "music": from changes in the music alone. */
+  /** "lyrics": timed from where the lyrics are sung. "music": from changes in the music alone. */
   source: "lyrics" | "music";
   /** Why lyric timing wasn't used, when it was wanted. */
   note?: string;
@@ -35,49 +38,72 @@ export function sectionsOfSlides(slides: readonly Slide[]): PlanSection[] {
 /**
  * Suggested start time for every slide, from the audio.
  *
- * When the sections carry their lyrics, the recording is transcribed (the
- * audio goes to OpenAI via the local service) and each section is found by its
- * words; the music then snaps each time to a real change. Without lyrics, or
- * if that fails or matches too little, the plan uses changes in the music
- * alone, and says so.
+ * When the sections carry their lyrics, each section is found by aligning its
+ * words to the recording in the browser (`alignSections`; nothing is sent
+ * anywhere), preferring the vocals stem; the music then snaps each time to a
+ * real change. Without lyrics, or if that fails or matches too little, the
+ * plan uses changes in the music alone, and says so.
  */
 export async function cuesForAudio(
   mix: Blob,
   sections: readonly PlanSection[],
   opts: AutoCueOptions = {},
 ): Promise<AutoCueResult> {
-  const samples = await decodeMono(await mix.arrayBuffer(), RATE);
-  const vocals = opts.vocals ? await decodeMono(await opts.vocals.arrayBuffer(), RATE) : undefined;
-  const analysis = await analyse(samples, RATE, {
+  let shown = 0;
+  const report = (fraction: number, detail?: string) => {
+    shown = Math.max(shown, fraction);
+    opts.onProgress?.(shown, detail);
+  };
+
+  const hasLyrics = sections.some((s) => (s.lyrics?.length ?? 0) > 0);
+  const useLyrics = opts.useLyrics !== false && hasLyrics;
+  const rates = useLyrics ? [RATE, ALIGN_SAMPLE_RATE] : [RATE];
+  const [samples, mix16] = await decodeMono(await mix.arrayBuffer(), rates);
+  const [vocals, vocals16] = opts.vocals ? await decodeMono(await opts.vocals.arrayBuffer(), rates) : [];
+  const analysis = await analyse(samples!, RATE, {
     signal: opts.signal,
-    onProgress: (f) => opts.onProgress?.(f * 0.5),
+    onProgress: (f) => report(f * 0.5),
   });
   const fallback = () =>
     planCues(analysis, sections, { vocalsOnset: vocals ? firstOnset(vocals, RATE) : undefined });
 
-  const hasLyrics = sections.some((s) => (s.lyrics?.length ?? 0) > 0);
-  if (opts.useLyrics === false || !hasLyrics) {
-    opts.onProgress?.(1);
+  if (!useLyrics) {
+    report(1);
     return { times: fallback(), source: "music" };
   }
 
   try {
-    opts.onProgress?.(0.55);
-    const phrases = await transcribeMix(mix, opts.signal);
-    opts.onProgress?.(0.95);
-    const planned = planFromMatches(analysis, sections, alignLyrics(phrases, sections));
-    opts.onProgress?.(1);
+    const matches = await alignSections({ mix: mix16!, vocals: vocals16 }, sections, {
+      run: opts.run,
+      onProgress: (p) => report(...alignProgress(p)),
+    });
+    if (opts.signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
+    const planned = planFromMatches(analysis, sections, matches);
+    report(1);
     if (planned) return { times: planned, source: "lyrics" };
     return {
       times: fallback(),
       source: "music",
-      note: phrases.length === 0
-        ? "no singing could be transcribed"
-        : "too few sections could be found in the transcript",
+      note: matches.every((m) => m === null)
+        ? "none of the lyrics could be found in the recording"
+        : "too few sections could be found in the recording",
     };
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    opts.onProgress?.(1);
+    report(1);
     return { times: fallback(), source: "music", note: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Alignment's stages onto the second half of the bar: the first-run model download, then loading it, then inference. */
+function alignProgress(p: AlignProgress): [number, string?] {
+  const f = p.fraction ?? 0;
+  switch (p.stage) {
+    case "downloading":
+      return [0.5 + 0.25 * f, `Downloading the lyric alignment model (first time only)${p.detail ? ` — ${p.detail}` : ""}`];
+    case "loading":
+      return [0.75, "Loading the lyric alignment model"];
+    case "inferring":
+      return [0.75 + 0.23 * f, "Listening for the lyrics"];
   }
 }

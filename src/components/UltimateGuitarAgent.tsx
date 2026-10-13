@@ -34,6 +34,7 @@ export function UltimateGuitarAgent({ onBack, onDeckCreated }: { onBack: () => v
   const [creating, setCreating] = useState(false);
   const [mp3, setMp3] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
+  const [progressDetail, setProgressDetail] = useState<string | undefined>();
   const attached = useDeckStore((s) => s.attached);
   const createDeckFromChords = useDeckStore((s) => s.createDeckFromChords);
 
@@ -44,8 +45,9 @@ export function UltimateGuitarAgent({ onBack, onDeckCreated }: { onBack: () => v
     if (!mp3) return;
     setCreating(true);
     setProgress(0);
+    setProgressDetail(undefined);
     try {
-      await createDeckFromChords(result, mp3, setProgress);
+      await createDeckFromChords(result, mp3, (fraction, detail) => { setProgress(fraction); setProgressDetail(detail); });
       onDeckCreated();
     } finally {
       setCreating(false);
@@ -159,13 +161,13 @@ export function UltimateGuitarAgent({ onBack, onDeckCreated }: { onBack: () => v
             <input type="file" accept="audio/*" className="hidden" onChange={(e) => setMp3(e.target.files?.[0] ?? null)} />
           </label>
           <button dir="ltr" className={button} disabled={!attached || !mp3 || creating} onClick={() => void createPresentation(result)}>
-            {creating ? `Syncing to the music… ${Math.round(progress * 100)}%` : "Create Presentation"}
+            {creating ? `${progressDetail ?? "Syncing to the music"}… ${Math.round(progress * 100)}%` : "Create Presentation"}
           </button>
           {!attached && <span dir="ltr" className="text-xs text-neutral-500">Open a library folder first</span>}
           {attached && !mp3 && <span dir="ltr" className="text-xs text-neutral-500">Choose the song's MP3 so the slides can be synced to it</span>}
           <p dir="ltr" className="basis-full text-xs text-neutral-500">
-            To time the slides by the lyrics, the MP3 is sent to OpenAI for a transcript. The chart and its lyrics are not sent;
-            they are matched to the transcript on this machine. If that fails, the music alone is used.
+            The slides are timed by finding the lyrics in the MP3, in this browser: nothing is uploaded. The first time, a
+            ~91MB model is downloaded and kept. If too few sections are found, the music alone is used.
           </p>
         </div>
       </section>}

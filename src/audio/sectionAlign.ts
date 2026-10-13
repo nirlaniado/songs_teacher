@@ -1,6 +1,5 @@
 import { emissionsFor, SECONDS_PER_FRAME, type AlignProgress, type RunSession } from "./alignModel.js";
 import { forcedAlign, normalizeForVocab, VOCAB } from "./ctcAlign.js";
-import type { SectionMatch } from "./lyricSync.js";
 
 /**
  * Finds where each section's known lyrics are sung, for `planFromMatches`.
@@ -17,6 +16,8 @@ import type { SectionMatch } from "./lyricSync.js";
  * that aren't sung lands says nothing about where the song has got to, and
  * trusting it could skip the next real section.
  */
+
+export interface SectionMatch { start: number; end: number }
 
 /** Long enough to hold a section plus an instrumental break before it; memory grows linearly with it. */
 export const WINDOW_SECONDS = 60;

@@ -439,10 +439,12 @@ the chord agent opens with the user's own subscribed account (`ChordLine.row`/`l
 Musixmatch/LyricFind need commercial terms and scraping lyric sites breaks theirs; don't add one.
 
 What the lyrics are for: they appear under the chords on generated slides, and they time the deck.
-`createDeckFromChords` sends the MP3 (audio only) to OpenAI via the local service for a
-timestamped transcript (`server/ug/transcribe.ts`, `POST /api/ug/transcribe`), then
-`audio/lyricSync.ts` matches each section's lyrics to the transcript **in the browser** — the
-chart's lyrics are never sent anywhere. `audio/segment.ts` `planFromMatches` turns matches into
+Timing is **in-browser forced alignment**, not transcription: nothing — neither the MP3 nor the
+lyrics — leaves the machine, and no API key is involved. `cuesForAudio` (`audio/autoCue.ts`) runs
+wav2vec2 (`audio/alignModel.ts`, ~91MB ONNX, cached like the Demucs model) over the song, preferring
+the vocals stem, and `audio/sectionAlign.ts` finds where each section's *known* lyrics are sung
+with the CTC aligner in `audio/ctcAlign.ts`, one bounded window at a time, leaving a section null
+when it can't be placed confidently. `audio/segment.ts` `planFromMatches` turns those matches into
 cues and `planCues` is the music-only fallback. A deck does not store lyrics separately (they are
 in the slides' text), so **Auto-suggest cues** in the Music sync panel re-times from the music
 alone.

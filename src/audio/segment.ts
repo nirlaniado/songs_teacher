@@ -191,7 +191,7 @@ export interface PlanSection {
   name: string;
   /** Chord lines on the slide — a rough measure of how long the section lasts. */
   lines: number;
-  /** The section's lyric lines, when known. Used to find it in a transcript. */
+  /** The section's lyric lines, when known. Used to find where it is sung. */
   lyrics?: string[];
 }
 
@@ -366,8 +366,8 @@ function sliceAnalysis(analysis: Analysis, from: number, to: number): { analysis
 
 /**
  * Moves each time to the strongest change in the audio within `toleranceSeconds`.
- * Times taken from a transcript are approximate; the music knows where the
- * change really is. A time with no change nearby is left alone.
+ * Times taken from where the lyrics are sung lag or lead the section change
+ * (a pickup, a breath); the music knows where the change really is. A time with no change nearby is left alone.
  */
 export function snapToNovelty(times: readonly number[], analysis: Analysis, toleranceSeconds: number): number[] {
   const tol = Math.max(1, Math.round(toleranceSeconds / analysis.blockSeconds));
@@ -386,7 +386,7 @@ export function snapToNovelty(times: readonly number[], analysis: Analysis, tole
   });
 }
 
-/** How far the music may move a time found in the transcript. */
+/** How far the music may move a time found from the lyrics. */
 const SNAP_SECONDS = 2.5;
 
 /**
