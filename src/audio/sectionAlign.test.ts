@@ -13,11 +13,11 @@ const V = ctc.VOCAB.length;
 const RATE = 16_000;
 const id = (t: string) => (ctc.VOCAB as readonly string[]).indexOf(t);
 
-/** What the fake model "hears": the token it is sure of at each frame (blank elsewhere) and how sure. */
-interface Script { token: Int32Array; p: Float32Array }
+/** What the fake model "hears": its top token at each frame (blank elsewhere) and how sure, plus an optional runner-up. */
+interface Script { token: Int32Array; p: Float32Array; alt: Int32Array; pAlt: Float32Array }
 function script(seconds: number): Script {
   const frames = framesFor(seconds * RATE);
-  return { token: new Int32Array(frames), p: new Float32Array(frames).fill(0.9) };
+  return { token: new Int32Array(frames), p: new Float32Array(frames).fill(0.9), alt: new Int32Array(frames).fill(-1), pAlt: new Float32Array(frames) };
 }
 /** Sings `text` from `atSeconds`: each character two frames then a blank. Returns the frame after the last character. */
 function sing(s: Script, text: string, atSeconds: number, p = 0.9): number {
@@ -41,7 +41,10 @@ function session(s: Script, samples: number) {
     for (let j = 0; j < frames; j++) {
       const g = offset + j;
       const p = s.p[g]!;
-      for (let v = 0; v < V; v++) logits[j * V + v] = Math.log(v === s.token[g] ? p : (1 - p) / (V - 1));
+      const alt = s.alt[g]!;
+      const pAlt = alt >= 0 ? s.pAlt[g]! : 0;
+      const rest = (1 - p - pAlt) / (V - (alt >= 0 ? 2 : 1));
+      for (let v = 0; v < V; v++) logits[j * V + v] = Math.log(v === s.token[g] ? p : v === alt ? pAlt : Math.max(rest, 1e-6));
     }
     return { logits, frames };
   };
@@ -94,7 +97,8 @@ describe("alignSections", () => {
     expect(matches[1]).toBeNull();
     expect(matches[2]!.start).toBeCloseTo(10, 1);
     expect(matches[3]).toBeNull();
-    expect(forcedAlign).toHaveBeenCalledTimes(1);
+    const sung = ctc.normalizeForVocab("only this one sings").map(id);
+    for (const [, ids] of forcedAlign.mock.calls) expect(ids.slice(1, -1)).toEqual(sung);
   });
 
   it("does not run the model at all when no section has lyrics", async () => {
@@ -159,6 +163,44 @@ describe("alignSections", () => {
     expect(match!.end).toBeCloseTo(end * 0.02, 1);
   });
 
+  it("does not squeeze ambiguous characters off the end of a section", async () => {
+    // The last nine characters are barely the model's first choice: each frame hears the character at 0.51 and the
+    // next one at 0.49, so a path that is paid to finish early gives up a frame per character almost for free.
+    const s = script(30);
+    const text = "clearly sung opening then a smudged ending";
+    const end = sing(s, text, 5);
+    const tokens = ctc.normalizeForVocab(text);
+    for (let k = tokens.length - 9; k < tokens.length; k++) {
+      const f = 250 + 3 * k;
+      for (const g of [f, f + 1]) {
+        s.p[g] = 0.51;
+        s.alt[g] = id(tokens[k + 1] ?? "<pad>");
+        s.pAlt[g] = 0.49;
+      }
+    }
+    const { run } = session(s, 30 * RATE);
+    const [match] = await alignSections({ mix: audio(30) }, [{ lyrics: [text] }], { run });
+    expect(match!.start).toBe(5);
+    expect(match!.end).toBe(Math.round(end * 2) / 100);
+  });
+
+  it("keeps looking past the first window when a failed section leaves the next one more than a window away", async () => {
+    const s = script(160);
+    sing(s, "the opening verse", 5);
+    sing(s, "the second verse after a long solo", 100);
+    sing(s, "and the last chorus", 130);
+    const { run } = session(s, 160 * RATE);
+    const matches = await alignSections(
+      { mix: audio(160) },
+      [{ lyrics: ["the opening verse"] }, { lyrics: ["a bridge this recording leaves out"] }, { lyrics: ["the second verse after a long solo"] }, { lyrics: ["and the last chorus"] }],
+      { run },
+    );
+    expect(matches[0]!.start).toBe(5);
+    expect(matches[1]).toBeNull();
+    expect(matches[2]!.start).toBe(100);
+    expect(matches[3]!.start).toBe(130);
+  });
+
   it("never runs backwards, even when sections are listed in a different order than they are sung", async () => {
     const s = script(60);
     sing(s, "alpha bravo charlie", 30);
@@ -194,11 +236,12 @@ describe("alignment memory", () => {
 
     expect(matches.slice(0, 12).every((m) => m !== null)).toBe(true);
     expect(matches[12]).toBeNull();
-    expect(forcedAlign).toHaveBeenCalledTimes(12);
+    expect(forcedAlign.mock.calls.length).toBeGreaterThanOrEqual(12);
+    // Each call carries two synthetic edge frames and the two filler tokens around the window and the lyric.
     for (const [rows, ids] of forcedAlign.mock.calls) {
-      expect(rows.length).toBeLessThanOrEqual(WINDOW_SECONDS / 0.02);
-      expect(ids.length).toBeLessThanOrEqual(MAX_SECTION_TOKENS);
-      expect(alignmentBytes(rows.length, ids.length)).toBeLessThanOrEqual(WORST_CASE_ALIGNMENT_BYTES);
+      expect(rows.length - 2).toBeLessThanOrEqual(WINDOW_SECONDS / 0.02);
+      expect(ids.length - 2).toBeLessThanOrEqual(MAX_SECTION_TOKENS);
+      expect(alignmentBytes(rows.length - 2, ids.length - 2)).toBeLessThanOrEqual(WORST_CASE_ALIGNMENT_BYTES);
     }
   });
 });
