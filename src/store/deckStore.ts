@@ -119,7 +119,7 @@ interface DeckState {
   createDeckFromChords(
     result: ChordResult,
     audio: File,
-    onProgress?: (fraction: number) => void,
+    onProgress?: (fraction: number, detail?: string) => void,
   ): Promise<void>;
   openDeck(id: string): Promise<void>;
   closeDeck(): void;

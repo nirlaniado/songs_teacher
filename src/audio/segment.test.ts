@@ -121,7 +121,7 @@ describe("planFromMatches", () => {
 
   it("starts each section where its lyrics were found, snapped to the change in the music", () => {
     const sections = [title, sec("Verse 1"), sec("Chorus")];
-    // The transcript is a little late (11.2 and 31.4); the music changes at 10 and 30.
+    // The lyrics are found a little late (11.2 and 31.4); the music changes at 10 and 30.
     const cues = planFromMatches(analysis, sections, [null, { start: 11.2, end: 20 }, { start: 31.4, end: 45 }]);
     expect(cues).toEqual([0, 10, 30]);
   });

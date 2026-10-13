@@ -39,14 +39,14 @@ npm run build        # typecheck + production build
 | For | You need |
 |---|---|
 | The editor | Node.js 22+ and a modern browser. Chrome/Edge/Brave store real files in a folder; Firefox/Safari keep work in browser storage. |
-| Music sync | An MP3 you already have. The app plays audio; it never downloads it from YouTube or Spotify. The automatic sync sends the MP3 (audio only) to OpenAI for a transcript, using the chord agent's `OPENAI_API_KEY`; without it the slides are timed from the music alone. |
-| Chord agent (optional) | An OpenAI API key with access to `gpt-5.4-mini`, and your Ultimate Guitar username and password, in a `.env` file (see below). |
+| Music sync | An MP3 you already have. The app plays audio; it never downloads it from YouTube or Spotify. Timing slides by their lyrics runs in the browser with a ~91MB model, downloaded once on first use; nothing is uploaded. |
+| Chord agent (optional) | An OpenRouter API key (free models, no payment method needed) and your Ultimate Guitar username and password, in a `.env` file (see below). |
 | Stem separation (optional) | A ~172MB model, downloaded once on first use, plus several minutes of CPU per song. Nothing is uploaded. |
 
 `.env` (only for the chord agent — copy `.env.example` and never overwrite an existing one):
 
 ```dotenv
-OPENAI_API_KEY=your-key
+OPENROUTER_API_KEY=your-key
 ULTIMATE_GUITAR_USERNAME=your-username
 ULTIMATE_GUITAR_PASSWORD=your-password
 ```
@@ -104,14 +104,13 @@ src/
 
 The **סוכן אקורדים · Ultimate Guitar** button is available on the start screen,
 even before opening a library. The agent uses your Ultimate Guitar account as its
-only chord source. GPT-5.4 mini identifies the song and calls a constrained search
+only chord source. A free OpenRouter model identifies the song and calls a constrained search
 tool; local TypeScript code chooses the version and extracts the actual chart.
 Credentials and chart content are never sent to the model. Only the user's song
-request is sent to OpenAI for the search; the MP3 is sent (audio only) when you create a
-presentation, for a transcript (see below). API usage is billed separately from the UG subscription.
+request is sent to OpenRouter for the search; the MP3 never leaves your machine (see below).
 
-Setup is in **Quick start** and **What you need** above. Optionally set
-`UG_AGENT_MODEL=gpt-5.4-mini` and `UG_TRANSCRIBE_MODEL=whisper-1` in `.env` to choose the models.
+Setup is in **Quick start** and **What you need** above. Optionally set `UG_AGENT_MODEL` in `.env`
+to choose the model.
 
 Once a chart is found, choose the song's MP3 (required) and press **Create Presentation**. It
 builds a deck — a title slide plus one slide per song section, with the chords over their lyrics
@@ -119,19 +118,19 @@ in a monospace block — and syncs it to the song in the same step. Needs a libr
 first.
 
 **How the sync works.** The agent keeps each section's lyrics from the chart. When you press
-**Create Presentation**, the MP3 is sent (audio only) through your local agent service to OpenAI,
-which returns a timestamped transcript of the singing. Your chart's lyrics are then matched to
-that transcript *on your machine* — nothing about the chart is sent. Each section starts where
-its lyrics are found, in song order (so a repeated chorus lands on its own repeat), and the time
-is snapped to the nearest real change in the music. Instrumental sections have no words to find:
-an **Intro** takes over from the title slide after a 3-second hold, and a solo or outro starts
-where the singing before it ends. This uses your `OPENAI_API_KEY` and costs a small amount per
-song; the audio is sent as 16 kHz mono, which keeps a song under OpenAI's 25 MB limit.
+**Create Presentation**, a speech model (wav2vec2, ~91MB, downloaded once and cached) runs *in the
+browser* and finds where each section's known lyrics are sung — forced alignment, not
+transcription, so it only has to locate words it already has. Nothing is uploaded and no API key
+is involved. If the deck has a separated vocals stem, that is used, since a voice on its own
+aligns far more reliably than a full mix. Each section starts where its lyrics are found, in song
+order (so a repeated chorus lands on its own repeat), and the time is snapped to the nearest real
+change in the music. Instrumental sections have no words to find: an **Intro** takes over from the
+title slide after a 3-second hold, and a solo or outro starts where the singing before it ends.
 
-If the transcript can't be made (service down, quota, an instrumental) or too few sections are
-found in it, the slides are timed from the music alone (where the harmony changes), and you are
-told. That is rougher. Either way it is a starting point: a recording that differs from the chart
-(a skipped bridge, an extra chorus), or one Whisper mishears badly, can still land wrong. Check by
+If too few sections can be found confidently (an instrumental, a heavy mix, a chart that differs
+from the recording), the slides are timed from the music alone (where the harmony changes), and
+you are told. That is rougher. Either way it is a starting point: a recording that differs from
+the chart (a skipped bridge, an extra chorus) can still land wrong. Check by
 ear and fix any cue with **Set** in the **Music sync** panel. **Auto-suggest cues** there re-times
 from the music alone (a deck doesn't keep the chart's lyrics apart from the slides' text); one
 Ctrl+Z undoes the whole batch. If the sync fails entirely, the deck is still created with the MP3

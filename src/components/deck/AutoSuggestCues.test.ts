@@ -3,9 +3,9 @@ import { suggestionMessage } from "./AutoSuggestCues.js";
 
 describe("suggestionMessage", () => {
   it("says the music timed the cues, and why, when lyric timing fell back", () => {
-    const line = suggestionMessage({ source: "music", note: "no singing could be transcribed" }, 5, 5);
+    const line = suggestionMessage({ source: "music", note: "none of the lyrics could be found in the recording" }, 5, 5);
     expect(line).toContain("Timed from the music alone");
-    expect(line).toContain("no singing could be transcribed");
+    expect(line).toContain("none of the lyrics could be found in the recording");
   });
   it("says the music timed the cues when there was nothing to fall back from", () => {
     expect(suggestionMessage({ source: "music" }, 5, 5)).toContain("Timed from the music alone.");
