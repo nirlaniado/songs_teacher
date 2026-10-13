@@ -60,6 +60,8 @@ export async function cuesForAudio(
   const rates = useLyrics ? [RATE, ALIGN_SAMPLE_RATE] : [RATE];
   const [samples, mix16] = await decodeMono(await mix.arrayBuffer(), rates);
   const [vocals, vocals16] = opts.vocals ? await decodeMono(await opts.vocals.arrayBuffer(), rates) : [];
+  if (samples instanceof Error) throw samples;
+  if (vocals instanceof Error) throw vocals;
   const analysis = await analyse(samples!, RATE, {
     signal: opts.signal,
     onProgress: (f) => report(f * 0.5),
@@ -73,11 +75,14 @@ export async function cuesForAudio(
   }
 
   try {
+    // The 16 kHz copies exist only for alignment, so failing to make one falls back to the music like any other alignment failure.
+    if (mix16 instanceof Error) throw mix16;
+    if (vocals16 instanceof Error) throw vocals16;
     const matches = await alignSections({ mix: mix16!, vocals: vocals16 }, sections, {
       run: opts.run,
+      signal: opts.signal,
       onProgress: (p) => report(...alignProgress(p)),
     });
-    if (opts.signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
     const planned = planFromMatches(analysis, sections, matches);
     report(1);
     if (planned) return { times: planned, source: "lyrics" };

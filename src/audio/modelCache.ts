@@ -26,37 +26,43 @@ export async function isModelCached(url: string): Promise<boolean> {
 export async function loadModelBytes(
   url: string,
   onProgress: (loaded: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<ArrayBuffer> {
   const cache = typeof caches !== "undefined" ? await caches.open(CACHE_NAME).catch(() => null) : null;
 
   const hit = await cache?.match(url);
   if (hit) return hit.arrayBuffer();
 
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`Couldn't download the model (${response.status}).`);
 
-  // Cache before consuming the body — a Response can only be read once, so
-  // the clone has to be taken up front.
-  if (cache) await cache.put(url, response.clone()).catch(() => {});
-
   const total = Number(response.headers.get("Content-Length") ?? 0);
-  if (!response.body || !total) return response.arrayBuffer();
+  let bytes: ArrayBuffer;
+  if (!response.body || !total) {
+    bytes = await response.arrayBuffer();
+  } else {
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+      onProgress(loaded, total);
+    }
+    const joined = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      joined.set(chunk, offset);
+      offset += chunk.length;
+    }
+    bytes = joined.buffer;
+  }
 
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.length;
-    onProgress(loaded, total);
-  }
-  const bytes = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return bytes.buffer;
+  // Cached from the finished bytes, not from a clone of the response taken up front: putting a clone waits for the
+  // whole body, which held the progress above at zero until the download was over. Caching only a complete file also
+  // means a cancelled or failed download never leaves a truncated model to be served next time.
+  if (cache) await cache.put(url, new Response(bytes)).catch(() => {});
+  return bytes;
 }

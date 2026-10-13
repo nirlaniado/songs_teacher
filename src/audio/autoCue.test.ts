@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Slide } from "../schema/deck.js";
-import { framesFor, type AlignProgress, type RunSession } from "./alignModel.js";
+import { framesFor, type RunSession } from "./alignModel.js";
 import { cuesForAudio, sectionsOfSlides } from "./autoCue.js";
 import { normalizeForVocab, VOCAB } from "./ctcAlign.js";
 import * as decode from "./decodeMono.js";
 import * as sectionAlign from "./sectionAlign.js";
 
 vi.mock("./decodeMono.js", () => ({ decodeMono: vi.fn() }));
+// The real loader and session code run; only ONNX Runtime itself is replaced, by a model that hears nothing but blank.
+const ortRun = vi.hoisted(() => vi.fn());
+vi.mock("onnxruntime-web", () => ({
+  InferenceSession: { create: vi.fn(async () => ({ inputNames: ["input_values"], outputNames: ["logits"], run: ortRun })) },
+  Tensor: class { dims: number[]; constructor(_type: string, _data: unknown, dims: number[]) { this.dims = dims; } },
+}));
 vi.mock("./sectionAlign.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./sectionAlign.js")>();
   return { ...actual, alignSections: vi.fn(actual.alignSections) };
@@ -58,6 +64,13 @@ describe("cuesForAudio", () => {
   ];
 
   beforeEach(() => {
+    ortRun.mockReset();
+    ortRun.mockImplementation(async (feeds: Record<string, { dims: number[] }>) => {
+      const frames = framesFor(feeds.input_values!.dims[1]!);
+      const data = new Float32Array(frames * VOCAB.length).fill(Math.log(0.1 / 31));
+      for (let j = 0; j < frames; j++) data[j * VOCAB.length] = Math.log(0.9);
+      return { logits: { data, dims: [1, frames, VOCAB.length] } };
+    });
     decodeMono.mockReset();
     decodeMono.mockImplementation(async (data, rates) => {
       const name = new TextDecoder().decode(data);
@@ -139,36 +152,88 @@ describe("cuesForAudio", () => {
     expect(await cuesForAudio(mix, sections)).toMatchObject({ source: "music", note: "Couldn't download the model (503)." });
   });
 
-  it("lets cancellation through instead of falling back", async () => {
-    alignSections.mockRejectedValueOnce(new DOMException("Analysis cancelled", "AbortError"));
-    await expect(cuesForAudio(mix, sections)).rejects.toMatchObject({ name: "AbortError" });
-
-    const controller = new AbortController();
-    alignSections.mockImplementationOnce(async () => {
-      controller.abort();
-      return [{ start: 2, end: 8 }, { start: 12, end: 20 }];
+  it("falls back to the music when the 16 kHz copy for alignment can't be made", async () => {
+    decodeMono.mockImplementation(async (data, rates) => {
+      const name = new TextDecoder().decode(data);
+      return rates.map((rate) => (rate === 16000 ? new Error("OfflineAudioContext failed") : fileAt(name, rate)));
     });
-    await expect(cuesForAudio(mix, sections, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+    expect(await cuesForAudio(mix, sections)).toMatchObject({ source: "music", note: "OfflineAudioContext failed" });
+    expect(alignSections).not.toHaveBeenCalled();
   });
 
-  it("shows the first-run model download, never moves backward, and finishes at 1", async () => {
-    alignSections.mockImplementationOnce(async (_audio, _sections, opts) => {
-      const steps: AlignProgress[] = [
-        { stage: "downloading", fraction: 0 },
-        { stage: "downloading", fraction: 0.5, detail: "45 / 91 MB" },
-        { stage: "downloading", fraction: null },
-        { stage: "loading", fraction: null },
-        { stage: "inferring", fraction: 0 },
-        { stage: "inferring", fraction: 1 },
-      ];
-      for (const p of steps) opts!.onProgress!(p);
-      return [{ start: 2, end: 8 }, { start: 12, end: 20 }];
-    });
+  /** The model download, served by a stub whose chunks arrive when the test says, and which errors on abort like fetch. */
+  function modelDownload(chunks: number) {
+    const size = 1_000_000;
+    const releases: Array<() => void> = [];
+    const gates = Array.from({ length: chunks }, () => new Promise<void>((resolve) => releases.push(resolve)));
+    const state = { signal: undefined as AbortSignal | undefined, aborted: false };
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      state.signal = init?.signal ?? undefined;
+      let i = 0;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          state.signal?.addEventListener("abort", () => { state.aborted = true; controller.error(new DOMException("aborted", "AbortError")); });
+        },
+        async pull(controller) {
+          if (i === chunks) return controller.close();
+          await gates[i++];
+          if (!state.aborted) controller.enqueue(new Uint8Array(size));
+        },
+      }), { headers: { "Content-Length": String(chunks * size) } });
+    }));
+    return { state, release: (i: number) => releases[i]!() };
+  }
+
+  it("shows the model downloading as its bytes arrive, then loading and listening, never moving backward", async () => {
+    // A Cache API whose put reads the whole body first, as the browser's does.
+    const stored = new Map<string, ArrayBuffer>();
+    vi.stubGlobal("caches", { open: async () => ({ match: async () => undefined, put: async (url: string, r: Response) => { stored.set(url, await r.arrayBuffer()); } }) });
+    const download = modelDownload(3);
+    const progress: Array<[number, string | undefined]> = [];
+    const done = cuesForAudio(mix, sections, { onProgress: (f, d) => progress.push([f, d]) });
+    // While later chunks are still held back, each arrived chunk is the newest thing on the bar.
+    for (let i = 0; i < 2; i++) {
+      download.release(i);
+      await vi.waitFor(() => expect(progress.at(-1)).toEqual([0.5 + 0.25 * ((i + 1) / 3), `Downloading the lyric alignment model (first time only) — ${i + 1} / 3 MB`]), { timeout: 10_000 });
+    }
+    download.release(2);
+    // A model that hears nothing finds no lyrics, so this ends on the music.
+    expect(await done).toMatchObject({ source: "music" });
+    const stages = progress.map(([, d]) => d?.replace(/ —.*/, "")).filter((d, i, all) => i === 0 || d !== all[i - 1]);
+    expect(stages).toEqual([undefined, "Downloading the lyric alignment model (first time only)", "Loading the lyric alignment model", "Listening for the lyrics", undefined]);
+    for (let i = 1; i < progress.length; i++) expect(progress[i]![0]).toBeGreaterThanOrEqual(progress[i - 1]![0]);
+    expect(progress.at(-1)![0]).toBe(1);
+    expect(stored.size).toBe(1);
+  });
+
+  it("cancels the model download itself when cancelled during it", async () => {
+    const download = modelDownload(3);
+    const controller = new AbortController();
     const progress = vi.fn();
-    await cuesForAudio(mix, sections, { onProgress: progress });
-    const fractions = progress.mock.calls.map(([f]) => f as number);
-    for (let i = 1; i < fractions.length; i++) expect(fractions[i]!).toBeGreaterThanOrEqual(fractions[i - 1]!);
-    expect(fractions.at(-1)).toBe(1);
-    expect(progress.mock.calls.map(([, d]) => d)).toContain("Downloading the lyric alignment model (first time only) — 45 / 91 MB");
+    const done = cuesForAudio(mix, sections, { signal: controller.signal, onProgress: progress });
+    download.release(0);
+    await vi.waitFor(() => expect(progress.mock.calls.some(([, d]) => /1 \/ 3 MB/.test(d ?? ""))).toBe(true), { timeout: 10_000 });
+
+    controller.abort();
+    await expect(done).rejects.toMatchObject({ name: "AbortError" });
+    expect(download.state.signal).toBe(controller.signal);
+    expect(download.state.aborted).toBe(true);
+    expect(ortRun).not.toHaveBeenCalled();
+  });
+
+  it("stops waiting on inference when cancelled during it, and starts no further chunk", async () => {
+    const controller = new AbortController();
+    const run = vi.fn<RunSession>(() => new Promise(() => {}));
+    const done = cuesForAudio(mix, sections, { signal: controller.signal, run });
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+
+    controller.abort();
+    await expect(done).rejects.toMatchObject({ name: "AbortError" });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets an AbortError from alignment through instead of falling back", async () => {
+    alignSections.mockRejectedValueOnce(new DOMException("Analysis cancelled", "AbortError"));
+    await expect(cuesForAudio(mix, sections)).rejects.toMatchObject({ name: "AbortError" });
   });
 });

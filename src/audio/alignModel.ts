@@ -5,7 +5,7 @@ import { loadModelBytes } from "./modelCache.js";
  * Runs wav2vec2 over a whole song and returns its CTC logits, for
  * `ctcAlign.forcedAlign`.
  *
- * Input is 16 kHz mono samples; decode with `decodeMono(data, ALIGN_SAMPLE_RATE)`.
+ * Input is 16 kHz mono samples; decode with `decodeMono(data, [ALIGN_SAMPLE_RATE])`.
  * The song is cut into overlapping chunks because attention is O(T²), and the
  * chunks are stitched back so the result is frame-for-frame what one pass
  * over the whole song would index. Inference goes through `RunSession` so the
@@ -121,14 +121,14 @@ export async function emissionsFor(
   return { logits, frames, vocabSize, secondsPerFrame: SECONDS_PER_FRAME };
 }
 
-/** The real inference call. Downloads and opens the model on first use, then reuses the session. */
-export function onnxSession(onProgress: (p: AlignProgress) => void = () => {}, modelUrl = ALIGN_MODEL_URL): RunSession {
+/** The real inference call. Downloads and opens the model on first use, then reuses the session. `signal` cancels the download. */
+export function onnxSession(onProgress: (p: AlignProgress) => void = () => {}, modelUrl = ALIGN_MODEL_URL, signal?: AbortSignal): RunSession {
   let ready: ReturnType<typeof open> | undefined;
   async function open() {
     const ort = await import("onnxruntime-web");
     onProgress({ stage: "downloading", fraction: 0 });
     const bytes = await loadModelBytes(modelUrl, (loaded, total) =>
-      onProgress({ stage: "downloading", fraction: total ? loaded / total : null, detail: `${Math.round(loaded / 1e6)} / ${Math.round(total / 1e6)} MB` }));
+      onProgress({ stage: "downloading", fraction: total ? loaded / total : null, detail: `${Math.round(loaded / 1e6)} / ${Math.round(total / 1e6)} MB` }), signal);
     onProgress({ stage: "loading", fraction: null });
     // WASM only: the quantized graph's DynamicQuantizeLinear/MatMulInteger nodes have no WebGPU kernels in ORT Web, so WebGPU only adds partition crossings. Benchmark before re-adding it (an fp32 override is where it might help).
     const session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "basic" });
