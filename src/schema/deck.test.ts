@@ -131,6 +131,12 @@ describe("Deck schema", () => {
     ).not.toThrow();
   });
 
+  it("still loads a deck with two slides on the same cue time", () => {
+    // Existing decks contain these; the timing panel warns instead of the schema rejecting them.
+    const d = deck([slide({ startTime: 0 }), slide({ startTime: 0 }), slide({ startTime: 20 })]);
+    expect(d.slides.map((s) => s.startTime)).toEqual([0, 0, 20]);
+  });
+
   it("rejects cue times that run backwards through the deck", () => {
     // Slide 3 cued before slide 2 would make auto-advance jump backwards.
     expect(() => deck([slide({ startTime: 0 }), slide({ startTime: 90 }), slide({ startTime: 40 })])).toThrow(
