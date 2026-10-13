@@ -128,7 +128,7 @@ export function onnxSession(onProgress: (p: AlignProgress) => void = () => {}, m
     const ort = await import("onnxruntime-web");
     onProgress({ stage: "downloading", fraction: 0 });
     const bytes = await loadModelBytes(modelUrl, (loaded, total) =>
-      onProgress({ stage: "downloading", fraction: total ? loaded / total : null, detail: `${Math.round(loaded / 1e6)} / ${Math.round(total / 1e6)} MB` }), signal);
+      onProgress({ stage: "downloading", fraction: total ? loaded / total : null, detail: `${Math.round(loaded / 1e6)}${total ? ` / ${Math.round(total / 1e6)}` : ""} MB` }), signal);
     onProgress({ stage: "loading", fraction: null });
     // WASM only: the quantized graph's DynamicQuantizeLinear/MatMulInteger nodes have no WebGPU kernels in ORT Web, so WebGPU only adds partition crossings. Benchmark before re-adding it (an fp32 override is where it might help).
     const session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "basic" });

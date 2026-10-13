@@ -22,6 +22,10 @@ export async function isModelCached(url: string): Promise<boolean> {
  * Worth the plumbing: without it every run re-downloads the model (172MB for
  * Demucs, 91MB for alignment). The cache is keyed by URL, so pointing at a
  * different export invalidates naturally.
+ *
+ * `onProgress` gets the bytes received and the expected total: 0 when the
+ * server didn't say (a chunked response), and never less than what has
+ * already arrived, since a compressed or wrong Content-Length can understate it.
  */
 export async function loadModelBytes(
   url: string,
@@ -36,9 +40,9 @@ export async function loadModelBytes(
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`Couldn't download the model (${response.status}).`);
 
-  const total = Number(response.headers.get("Content-Length") ?? 0);
+  const length = Number(response.headers.get("Content-Length")) || 0;
   let bytes: ArrayBuffer;
-  if (!response.body || !total) {
+  if (!response.body) {
     bytes = await response.arrayBuffer();
   } else {
     const reader = response.body.getReader();
@@ -49,7 +53,7 @@ export async function loadModelBytes(
       if (done) break;
       chunks.push(value);
       loaded += value.length;
-      onProgress(loaded, total);
+      onProgress(loaded, length && Math.max(length, loaded));
     }
     const joined = new Uint8Array(loaded);
     let offset = 0;

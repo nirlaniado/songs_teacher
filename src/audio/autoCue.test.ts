@@ -162,7 +162,7 @@ describe("cuesForAudio", () => {
   });
 
   /** The model download, served by a stub whose chunks arrive when the test says, and which errors on abort like fetch. */
-  function modelDownload(chunks: number) {
+  function modelDownload(chunks: number, contentLength?: string | null) {
     const size = 1_000_000;
     const releases: Array<() => void> = [];
     const gates = Array.from({ length: chunks }, () => new Promise<void>((resolve) => releases.push(resolve)));
@@ -179,7 +179,7 @@ describe("cuesForAudio", () => {
           await gates[i++];
           if (!state.aborted) controller.enqueue(new Uint8Array(size));
         },
-      }), { headers: { "Content-Length": String(chunks * size) } });
+      }), { headers: contentLength === null ? {} : { "Content-Length": contentLength ?? String(chunks * size) } });
     }));
     return { state, release: (i: number) => releases[i]!() };
   }
@@ -204,6 +204,20 @@ describe("cuesForAudio", () => {
     for (let i = 1; i < progress.length; i++) expect(progress[i]![0]).toBeGreaterThanOrEqual(progress[i - 1]![0]);
     expect(progress.at(-1)![0]).toBe(1);
     expect(stored.size).toBe(1);
+  });
+
+  it("shows a download of unknown size as received megabytes with the bar held, and an understated one capped at its end", async () => {
+    for (const [length, labels] of [[null, ["1 MB", "2 MB", "3 MB"]], ["1000000", ["1 / 1 MB", "2 / 2 MB", "3 / 3 MB"]]] as const) {
+      const download = modelDownload(3, length);
+      const progress: Array<[number, string | undefined]> = [];
+      const done = cuesForAudio(mix, sections, { onProgress: (f, d) => progress.push([f, d]) });
+      for (let i = 0; i < 3; i++) download.release(i);
+      await done;
+      const downloads = progress.filter(([, d]) => d?.startsWith("Downloading"));
+      expect(downloads.slice(1).map(([, d]) => d!.replace(/.*— /, ""))).toEqual(labels);
+      for (const [f] of downloads) expect(f).toBeLessThanOrEqual(0.75);
+      if (length === null) for (const [f] of downloads) expect(f).toBe(0.5);
+    }
   });
 
   it("cancels the model download itself when cancelled during it", async () => {
