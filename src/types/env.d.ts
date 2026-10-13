@@ -10,6 +10,8 @@
 interface ImportMetaEnv {
   /** Override the Demucs ONNX model URL — self-host it, or use a different export. */
   readonly VITE_DEMUCS_MODEL_URL?: string;
+  /** Override the wav2vec2 ONNX model used to align lyrics to the song. */
+  readonly VITE_ALIGN_MODEL_URL?: string;
 }
 
 interface ImportMeta {
