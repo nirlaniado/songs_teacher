@@ -20,23 +20,23 @@ import { StemMixer } from "./StemMixer.js";
  * order cues are flagged inline the moment they're entered.
  */
 /**
- * Cues that break the forward rule (`outOfOrder`), and cues on the same instant
- * as the cued slide before them (`sameTimeAs`, mapping to that slide's index).
+ * Cues earlier than any cue before them (`outOfOrder`), and cues on the same
+ * instant as the previous cued slide (`sameTimeAs`, mapping to the first slide
+ * of that run). A slide can be both.
  */
 export function cueWarnings(slides: readonly Slide[]): { outOfOrder: Set<number>; sameTimeAs: Map<number, number> } {
   const outOfOrder = new Set<number>();
   const sameTimeAs = new Map<number, number>();
-  let lastTime = -1;
-  let lastIndex = -1;
+  let maxTime = -Infinity;
+  let previous: { index: number; time: number } | null = null;
   for (const [i, slide] of slides.entries()) {
-    if (slide.startTime === undefined) continue;
-    if (slide.startTime < lastTime) outOfOrder.add(i);
+    const time = slide.startTime;
+    if (time === undefined) continue;
+    if (time < maxTime) outOfOrder.add(i);
     // Only a warning: Deck.superRefine accepts equal times, and tightening it without a versioned migration would stop existing decks with duplicates from loading.
-    else if (slide.startTime === lastTime) sameTimeAs.set(i, lastIndex);
-    else {
-      lastTime = slide.startTime;
-      lastIndex = i;
-    }
+    if (previous && time === previous.time) sameTimeAs.set(i, sameTimeAs.get(previous.index) ?? previous.index);
+    maxTime = Math.max(maxTime, time);
+    previous = { index: i, time };
   }
   return { outOfOrder, sameTimeAs };
 }

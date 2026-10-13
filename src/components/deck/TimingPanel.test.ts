@@ -19,6 +19,21 @@ describe("cueWarnings", () => {
     expect(sameTimeAs.size).toBe(0);
     expect(outOfOrder.size).toBe(0);
   });
+  it("reports a run of shared times after a backward cue as both out of order and shared", () => {
+    const { sameTimeAs, outOfOrder } = cueWarnings(slides(30, 10, 10, 10));
+    expect([...outOfOrder]).toEqual([1, 2, 3]);
+    expect([...sameTimeAs]).toEqual([[2, 1], [3, 1]]);
+  });
+  it("compares with the previous cued slide, skipping uncued ones in between", () => {
+    const { sameTimeAs, outOfOrder } = cueWarnings(slides(0, 15, undefined, undefined, 15, 20));
+    expect([...sameTimeAs]).toEqual([[4, 1]]);
+    expect(outOfOrder.size).toBe(0);
+  });
+  it("does not treat a repeat of an earlier, non-adjacent time as shared", () => {
+    const { sameTimeAs, outOfOrder } = cueWarnings(slides(10, 20, 10));
+    expect(sameTimeAs.size).toBe(0);
+    expect([...outOfOrder]).toEqual([2]);
+  });
   it("keeps flagging backward cues as out of order, not as shared", () => {
     const { sameTimeAs, outOfOrder } = cueWarnings(slides(0, 30, 10));
     expect([...outOfOrder]).toEqual([2]);
