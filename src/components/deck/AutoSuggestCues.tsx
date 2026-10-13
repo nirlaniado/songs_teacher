@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { cuesForAudio, sectionsOfSlides } from "../../audio/autoCue.js";
+import { cuesForAudio, sectionsOfSlides, type AutoCueResult } from "../../audio/autoCue.js";
 import { useDeckStore } from "../../store/deckStore.js";
 
 /**
@@ -12,6 +12,17 @@ import { useDeckStore } from "../../store/deckStore.js";
  * wrong cue is fixed with the same Set button as always, and one Ctrl+Z
  * undoes the whole batch.
  */
+/** One line saying how many slides were cued and whether the lyrics or only the music timed them. */
+export function suggestionMessage(result: Pick<AutoCueResult, "source" | "note">, placed: number, slides: number): string {
+  const count = placed < slides
+    ? `Found ${placed} distinct parts for ${slides} slides — the rest are left uncued.`
+    : "Cued every slide.";
+  const source = result.source === "lyrics"
+    ? "Timed from the lyrics."
+    : `Timed from the music alone${result.note ? ` — ${result.note}` : ""}.`;
+  return `${count} ${source} Check them by ear.`;
+}
+
 export function AutoSuggestCues() {
   const deck = useDeckStore((s) => s.deck);
   const adapter = useDeckStore((s) => s.adapter);
@@ -44,22 +55,15 @@ export function AutoSuggestCues() {
       const vocals = vocalsRef ? await adapter.readDeckAsset(deck.id, vocalsRef.path) : undefined;
 
       // A deck doesn't keep the chart's lyrics, so re-running here times from the music alone.
-      const { times } = await cuesForAudio(mix, sectionsOfSlides(deck.slides), {
+      const { times, source, note } = await cuesForAudio(mix, sectionsOfSlides(deck.slides), {
         vocals,
         signal: controller.signal,
         onProgress: setFraction,
       });
       const applied = setSlideCues(deck.slides.map((_, index) => ({ index, seconds: times[index] })));
       const placed = times.filter((t) => t !== undefined).length;
-      if (!applied) {
-        setError("The suggested cues didn't run forward, so nothing was changed.");
-      } else if (placed < deck.slides.length) {
-        setMessage(
-          `Found ${placed} distinct parts for ${deck.slides.length} slides — the rest are left uncued. Check them by ear.`,
-        );
-      } else {
-        setMessage("Cues suggested from the music. Play the track and adjust any that are off.");
-      }
+      if (!applied) setError("The suggested cues didn't run forward, so nothing was changed.");
+      else setMessage(suggestionMessage({ source, note }, placed, deck.slides.length));
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
         setError(err instanceof Error ? err.message : String(err));

@@ -183,3 +183,78 @@ describe("firstOnset", () => {
     expect(firstOnset(new Float32Array(RATE), RATE)).toBeNull();
   });
 });
+
+describe("no two cues on one instant", () => {
+  const spikes = (blockSeconds: number, length: number, at: Record<number, number>): Analysis => ({
+    blockSeconds, rate: RATE, novelty: Array.from({ length }, (_, i) => at[i] ?? 0),
+  });
+  const strictlyIncreasing = (times: Array<number | undefined>) => {
+    const set = times.filter((t): t is number => t !== undefined);
+    for (let i = 1; i < set.length; i++) expect(set[i]!).toBeGreaterThan(set[i - 1]!);
+  };
+
+  it("planCues: leaves the sections uncued when their change rounds onto the cover's 0:00", () => {
+    // The only change is at 0.04 s, which rounds to 0 — the cover's time.
+    const cues = planCues(spikes(0.01, 100, { 4: 5 }), [CHART.title, CHART.sec("Intro"), CHART.sec("Verse 1")], { minGapSeconds: 0 });
+    expect(cues).toEqual([0, undefined, undefined]);
+  });
+
+  it("planCues: two changes that round to the same tenth cue only the first slide", () => {
+    const cues = planCues(spikes(0.01, 300, { 101: 5, 104: 5 }), [CHART.sec("A"), CHART.sec("B"), CHART.sec("C")], { minGapSeconds: 0 });
+    expect(cues).toEqual([0, 1, undefined]);
+  });
+
+  describe("planFromMatches", () => {
+    const sec = (name: string, lyrics: string[] = ["words"], lines = 4) => ({ name, lines, lyrics });
+    const title = { name: "Title", lines: 0, lyrics: [] };
+
+    it("leaves a section uncued when its anchor snaps onto the cover's 0", () => {
+      const analysis = spikes(1, 100, { 0: 5, 30: 5 });
+      const cues = planFromMatches(analysis, [title, sec("Verse 1"), sec("Chorus")], [null, { start: 0.4, end: 20 }, { start: 30.5, end: 45 }]);
+      expect(cues).toEqual([0, undefined, 30]);
+    });
+
+    it("leaves the later section uncued when two anchors snap onto the same change", () => {
+      const analysis = spikes(1, 100, { 30: 5, 60: 5 });
+      const cues = planFromMatches(analysis, [title, sec("A"), sec("B"), sec("C")], [null, { start: 29, end: 31 }, { start: 31.5, end: 40 }, { start: 60, end: 70 }]);
+      expect(cues).toEqual([0, 30, undefined, 60]);
+    });
+
+    it("leaves an instrumental section uncued rather than on the anchor it would share a time with", () => {
+      // Verse 1's singing "ends" where it starts, so the solo would begin on the verse's own cue.
+      const analysis = spikes(1, 100, { 10: 5, 52: 5 });
+      const cues = planFromMatches(analysis, [title, sec("Verse 1"), sec("Solo", [], 2), sec("Chorus")], [null, { start: 10, end: 10 }, null, { start: 52, end: 70 }]);
+      expect(cues).toEqual([0, 10, undefined, 52]);
+    });
+  });
+
+  it("never returns equal or backward times, and keeps uncued slides undefined, for arbitrary input", () => {
+    let seed = 7;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    for (let run = 0; run < 300; run++) {
+      const blockSeconds = [0.01, 0.05, 0.46, 1][Math.floor(rand() * 4)]!;
+      const length = 20 + Math.floor(rand() * 200);
+      const novelty = Array.from({ length }, () => (rand() < 0.15 ? rand() * 10 : 0));
+      const analysis: Analysis = { blockSeconds, rate: RATE, novelty };
+      const total = length * blockSeconds;
+      const sections = Array.from({ length: 1 + Math.floor(rand() * 7) }, (_, i) => ({
+        name: i === 1 && rand() < 0.5 ? "Intro" : `S${i}`,
+        lines: i === 0 && rand() < 0.5 ? 0 : 1 + Math.floor(rand() * 8),
+        lyrics: rand() < 0.7 ? ["words"] : [],
+      }));
+      const minGapSeconds = rand() < 0.5 ? 0 : rand() * 8;
+      const music = planCues(analysis, sections, { minGapSeconds, vocalsOnset: rand() < 0.5 ? rand() * 8 : null });
+      const matches = sections.map(() => {
+        if (rand() < 0.3) return null;
+        const start = Math.round(rand() * total * 10) / 10;
+        return { start, end: start + rand() * 10 };
+      });
+      const lyric = planFromMatches(analysis, sections, matches, { minGapSeconds }) ?? [];
+      for (const times of [music, lyric]) {
+        strictlyIncreasing(times);
+        for (const t of times) if (t !== undefined) expect(Number.isFinite(t)).toBe(true);
+      }
+      expect(music).toHaveLength(sections.length);
+    }
+  });
+});

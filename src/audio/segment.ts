@@ -340,7 +340,21 @@ export function planCues(
     out[offset] = cover ? Math.min(TITLE_HOLD_SECONDS, (bounds[0] ?? Infinity) / 2) : 0;
     bounds.forEach((t, j) => (out[offset + 1 + j] = t));
   }
-  return out;
+  return strictlyForward(out);
+}
+
+/**
+ * Leaves uncued any slide whose time is not later than the last cued slide
+ * before it. Equal times count: two slides on one instant means the clock can
+ * only ever show one of them, and an honest gap beats an invented time.
+ */
+function strictlyForward(times: Array<number | undefined>): Array<number | undefined> {
+  let last = -Infinity;
+  return times.map((t) => {
+    if (t === undefined || t <= last) return undefined;
+    last = t;
+    return t;
+  });
 }
 
 /** A stretch of the analysis, for placing sections inside a gap. `offset` converts back to song time. */
@@ -442,13 +456,5 @@ export function planFromMatches(
     i = j;
   }
 
-  // Never let a cue run backwards.
-  let last = 0;
-  for (let k = 0; k < n; k++) {
-    const t = times[k];
-    if (t === undefined) continue;
-    if (t < last) times[k] = undefined;
-    else last = t;
-  }
-  return times;
+  return strictlyForward(times);
 }

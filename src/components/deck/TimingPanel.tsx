@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { buildCues, formatCue, parseCue, slideIndexAt } from "../../schema/deck.js";
+import { buildCues, formatCue, parseCue, slideIndexAt, type Slide } from "../../schema/deck.js";
 import { resolveGains } from "../../audio/mix.js";
 import { useDeckPlayer } from "../../audio/useDeckPlayer.js";
 import { useDeckStore } from "../../store/deckStore.js";
@@ -19,6 +19,28 @@ import { StemMixer } from "./StemMixer.js";
  * Rather than let that surface as a validation failure at save time, out-of-
  * order cues are flagged inline the moment they're entered.
  */
+/**
+ * Cues that break the forward rule (`outOfOrder`), and cues on the same instant
+ * as the cued slide before them (`sameTimeAs`, mapping to that slide's index).
+ */
+export function cueWarnings(slides: readonly Slide[]): { outOfOrder: Set<number>; sameTimeAs: Map<number, number> } {
+  const outOfOrder = new Set<number>();
+  const sameTimeAs = new Map<number, number>();
+  let lastTime = -1;
+  let lastIndex = -1;
+  for (const [i, slide] of slides.entries()) {
+    if (slide.startTime === undefined) continue;
+    if (slide.startTime < lastTime) outOfOrder.add(i);
+    // Only a warning: Deck.superRefine accepts equal times, and tightening it without a versioned migration would stop existing decks with duplicates from loading.
+    else if (slide.startTime === lastTime) sameTimeAs.set(i, lastIndex);
+    else {
+      lastTime = slide.startTime;
+      lastIndex = i;
+    }
+  }
+  return { outOfOrder, sameTimeAs };
+}
+
 export function TimingPanel() {
   const deck = useDeckStore((s) => s.deck);
   const attachAudio = useDeckStore((s) => s.attachAudio);
@@ -54,14 +76,7 @@ export function TimingPanel() {
   const cues = buildCues(deck.slides);
   const liveIndex = slideIndexAt(cues, time);
 
-  // First slide index whose cue breaks the forward-order rule.
-  const outOfOrder = new Set<number>();
-  let lastTime = -1;
-  for (const [i, slide] of deck.slides.entries()) {
-    if (slide.startTime === undefined) continue;
-    if (slide.startTime < lastTime) outOfOrder.add(i);
-    else lastTime = slide.startTime;
-  }
+  const { outOfOrder, sameTimeAs } = cueWarnings(deck.slides);
 
   function commitDraft(index: number, slideId: string) {
     const raw = drafts[slideId];
@@ -176,7 +191,8 @@ export function TimingPanel() {
           <tbody>
             {deck.slides.map((slide, i) => {
               const isLive = liveIndex === i;
-              const bad = outOfOrder.has(i);
+              const shared = sameTimeAs.get(i);
+              const bad = outOfOrder.has(i) || shared !== undefined;
               return (
                 <tr
                   key={slide.id}
@@ -192,9 +208,17 @@ export function TimingPanel() {
                     >
                       {slide.name}
                     </button>
-                    {bad && (
+                    {outOfOrder.has(i) && (
                       <span className="ml-1 text-[10px] text-amber-500" title="Cue runs backwards">
                         ⚠ out of order
+                      </span>
+                    )}
+                    {shared !== undefined && (
+                      <span
+                        className="ml-1 text-[10px] text-amber-500"
+                        title="Two slides on one instant: the music can only show one of them"
+                      >
+                        ⚠ same time as slide {shared + 1}
                       </span>
                     )}
                   </td>
