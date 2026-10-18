@@ -41,8 +41,15 @@ You decide the rest: naming, style, test placement, scope trims, how far a refac
 
 - **Hub and spoke.** Seats never prompt each other. Every handoff routes through you.
 - A seat reports `blocked`: `herdr agent read` it to see the dialog, raise
-  `herdr notification show` for the user, and leave the question unanswered. Never answer an
-  approval prompt on the user's behalf.
+  `herdr notification show` for the user, summarise what it is asking, and **leave it
+  unanswered**. This covers *every* blocked state — a tool-permission prompt, a question the
+  seat is directing at you, anything. Do not press a key in that pane.
+
+  Give the user a recommendation so they can decide quickly; a recommendation is still useful,
+  it just is not a decision. The earlier wording said "never answer an *approval*", which left
+  room to treat a scope question aimed at `pm` as answerable — and it was, once. The user's
+  instruction was to remove the distinction: a rule with no judgement call in it cannot be
+  judged wrongly.
 - A dispatch times out or stalls: `herdr agent read` the pane first. Then re-brief with a
   corrected task, or abandon the branch. **Never** blindly re-prompt — a timeout does not prove
   the prompt was never delivered.
