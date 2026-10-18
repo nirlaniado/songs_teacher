@@ -291,8 +291,9 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ### Commands
 
 ```bash
-npm run dev        # vite dev server — the daily loop
-npm test           # vitest — 277 tests
+npm start          # vite + the chord agent's local service together; Ctrl+C stops both
+npm run dev        # vite dev server only — the daily loop when the agent isn't needed
+npm test           # vitest — 365 tests
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build
 ```

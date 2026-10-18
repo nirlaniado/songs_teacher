@@ -23,8 +23,11 @@ your presentations in.
 ```bash
 npm install
 npm run ug:install-browser
-npm run dev:agent
+npm start
 ```
+
+`npm start` runs the app and the chord agent's local service together, and Ctrl+C stops
+both. (`npm run dev:agent` is the same command under its older name.)
 
 **Other commands**
 
@@ -137,9 +140,9 @@ from the music alone (a deck doesn't keep the chart's lyrics apart from the slid
 Ctrl+Z undoes the whole batch. If the sync fails entirely, the deck is still created with the MP3
 attached and no cues.
 
-Open the Vite address shown in the terminal, then the chord agent. Example input:
-`VIVA LA VIDA — COLDPALY`. Alternatively run `npm run ug:server` and `npm run dev`
-in separate terminals. Restart the agent after changing its code or `.env`.
+Start everything with `npm start`, open the Vite address shown in the terminal, then the chord
+agent. Example input: `VIVA LA VIDA — COLDPALY`. Alternatively run `npm run ug:server` and
+`npm run dev` in separate terminals. Restart the agent after changing its code or `.env`.
 The Vite dev/preview server proxies `/api/ug` to the loopback-only service on 4318;
 this personal account service is not designed for public deployment.
 
