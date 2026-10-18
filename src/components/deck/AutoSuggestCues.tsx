@@ -56,7 +56,6 @@ export function AutoSuggestCues() {
       const vocalsRef = deck.audio.stems?.find((s) => s.id === "vocals");
       const vocals = vocalsRef ? await adapter.readDeckAsset(deck.id, vocalsRef.path) : undefined;
 
-      // A deck doesn't keep the chart's lyrics, so re-running here times from the music alone.
       const { times, source, note } = await cuesForAudio(mix, sectionsOfSlides(deck.slides), {
         vocals,
         signal: controller.signal,

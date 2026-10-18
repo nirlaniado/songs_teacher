@@ -5,6 +5,8 @@ import { cuesForAudio, sectionsOfSlides } from "./autoCue.js";
 import { normalizeForVocab, VOCAB } from "./ctcAlign.js";
 import * as decode from "./decodeMono.js";
 import * as sectionAlign from "./sectionAlign.js";
+import { applyLayout } from "../deck/templates.js";
+import { chordDeckSlides } from "../deck/fromChords.js";
 
 vi.mock("./decodeMono.js", () => ({ decodeMono: vi.fn() }));
 // The real loader and session code run; only ONNX Runtime itself is replaced, by a model that hears nothing but blank.
@@ -35,6 +37,63 @@ describe("sectionsOfSlides", () => {
       { name: "Title", lines: 0 },
       { name: "Verse 1", lines: 2 },
       { name: "Empty", lines: 0 },
+    ]);
+  });
+
+  const newId = () => crypto.randomUUID();
+  /** A slide built from a real layout, its title and body placeholders filled in order, plus any extra elements. */
+  function laidOut(name: string, layout: Slide["layout"], title: string, bodies: string[], extra: Slide["elements"] = []): Slide {
+    let b = 0;
+    const elements = applyLayout([], layout, newId).map((el) =>
+      el.kind !== "text" ? el : { ...el, text: el.role === "title" ? title : (bodies[b++] ?? "") },
+    );
+    return { id: newId(), name, layout, elements: [...elements, ...extra] };
+  }
+  const tab = (text: string): Slide["elements"][number] => ({
+    id: newId(), kind: "tab", x: 0, y: 0, w: 10, h: 10, rotation: 0, locked: false, text, style: { fontSize: 20, lineHeight: 1.3, valign: "top" },
+  });
+  const note = (text: string): Slide["elements"][number] => ({
+    id: newId(), kind: "text", x: 0, y: 0, w: 10, h: 10, rotation: 0, locked: false, text, role: "none",
+    style: { fontSize: 20, bold: false, italic: false, underline: false, align: "left", valign: "top", lineHeight: 1.25 },
+  });
+
+  it("takes lyrics from body placeholders only — never the heading, the cover, a tab or a free text box", () => {
+    const sections = sectionsOfSlides([
+      laidOut("Title", "centered", "The Sound of Silence", ["Simon & Garfunkel\nKey: Dm · Tuning: E A D G B E"]),
+      laidOut("Verse 1", "titleContent", "Verse 1", ["Hello darkness, my old friend\n\n  I've come to talk with you again  "], [tab("Dm   C\nDm")]),
+      laidOut("Chorus", "titleTwoContent", "Chorus", ["And the vision", "Still remains"], [note("Watch the bend here")]),
+    ]);
+    expect(sections).toEqual([
+      { name: "Title", lines: 0 },
+      { name: "Verse 1", lines: 2, lyrics: ["Hello darkness, my old friend", "I've come to talk with you again"] },
+      { name: "Chorus", lines: 0, lyrics: ["And the vision", "Still remains"] },
+    ]);
+    const all = sections.flatMap((s) => s.lyrics ?? []).join("\n");
+    for (const leak of ["Verse 1", "Chorus", "Sound of Silence", "Simon", "Key", "Tuning", "Dm", "bend"]) expect(all).not.toContain(leak);
+  });
+
+  it("finds no lyrics in a chord-import deck, whose lyrics live inside the tab element beside the chords", () => {
+    const slides = chordDeckSlides({
+      source: { id: "1", title: "Hallelujah", artist: "Leonard Cohen", url: "https://example.com", official: true, version: 1, views: 1 },
+      retrievedAt: "2026-01-01T00:00:00.000Z", selection: "official", warning: null, capo: 5, tuning: "E A D G B E", key: "C",
+      lines: [
+        { section: "Verse 1", sourceLine: 0, chords: ["C", "Am"], row: "C   Am", lyric: "I heard there was a secret chord" },
+        { section: "Chorus", sourceLine: 1, chords: ["F", "Am"], row: "F   Am", lyric: "Hallelujah" },
+      ],
+      uniqueChords: ["C", "Am", "F"], chart: "",
+    }, newId);
+    expect(sectionsOfSlides(slides)).toEqual([
+      { name: "Title", lines: 0 },
+      { name: "Verse 1", lines: 2 },
+      { name: "Chorus", lines: 2 },
+    ]);
+  });
+
+  it("handles a slide with no text, a lone slide and an empty deck", () => {
+    expect(sectionsOfSlides([])).toEqual([]);
+    expect(sectionsOfSlides([laidOut("Blank", "titleContent", "", [""])])).toEqual([{ name: "Blank", lines: 0 }]);
+    expect(sectionsOfSlides([laidOut("Only", "contentOnly", "", ["Just one line"])])).toEqual([
+      { name: "Only", lines: 0, lyrics: ["Just one line"] },
     ]);
   });
 });
@@ -109,6 +168,24 @@ describe("cuesForAudio", () => {
     expect(result.times[0]).toBe(2);
     expect(result.times[1]).toBeCloseTo(12, 0);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("takes the lyrics path for a deck whose slides carry lyrics, and the music alone for one that doesn't", async () => {
+    const slide = (name: string, body: string): Slide => ({
+      id: crypto.randomUUID(), name, layout: "titleContent",
+      elements: applyLayout([], "titleContent", () => crypto.randomUUID()).map((el) =>
+        el.kind === "text" ? { ...el, text: el.role === "title" ? name : body } : el),
+    });
+    alignSections.mockResolvedValueOnce([{ start: 2, end: 8 }, { start: 12, end: 20 }]);
+    const sung = await cuesForAudio(mix, sectionsOfSlides([slide("Verse 1", sections[0]!.lyrics[0]!), slide("Chorus", sections[1]!.lyrics[0]!)]));
+    expect(sung.source).toBe("lyrics");
+    expect(alignSections.mock.calls[0]![1].map((s) => s.lyrics)).toEqual(sections.map((s) => s.lyrics));
+
+    alignSections.mockClear();
+    const unsung = await cuesForAudio(mix, sectionsOfSlides([slide("Verse 1", ""), slide("Chorus", "")]));
+    expect(unsung).toMatchObject({ source: "music" });
+    expect(unsung.note).toBeUndefined();
+    expect(alignSections).not.toHaveBeenCalled();
   });
 
   it("decodes each file once, at both rates, and aligns the vocals stem when there is one", async () => {

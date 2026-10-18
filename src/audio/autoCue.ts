@@ -27,11 +27,16 @@ export interface AutoCueResult {
   note?: string;
 }
 
-/** What the planner knows about each slide when only the deck is available: its name and chord-line count. */
+/** What the planner knows about each slide when only the deck is available: its name, chord-line count and lyrics. */
 export function sectionsOfSlides(slides: readonly Slide[]): PlanSection[] {
   return slides.map((slide) => {
     const tab = slide.elements.find((el) => el.kind === "tab");
-    return { name: slide.name, lines: tab && tab.text.trim() ? tab.text.split("\n").length : 0 };
+    const lines = tab && tab.text.trim() ? tab.text.split("\n").length : 0;
+    // A lyric is a line in a layout "body" placeholder, except on the "centered" title-slide layout, whose body holds artist/key/tuning; titles, user-added text boxes and tabs never are.
+    const lyrics = slide.layout === "centered" ? [] : slide.elements.flatMap((el) =>
+      el.kind === "text" && el.role === "body" ? el.text.split("\n").map((l) => l.trim()).filter(Boolean) : [],
+    );
+    return lyrics.length > 0 ? { name: slide.name, lines, lyrics } : { name: slide.name, lines };
   });
 }
 
