@@ -105,7 +105,7 @@ export async function separateTrack(
     onProgress({
       stage: "downloading",
       fraction: total ? loaded / total : null,
-      detail: `${Math.round(loaded / 1e6)} / ${Math.round(total / 1e6)} MB`,
+      detail: `${Math.round(loaded / 1e6)}${total ? ` / ${Math.round(total / 1e6)}` : ""} MB`,
     });
   });
 

@@ -30,6 +30,7 @@ export function AutoSuggestCues() {
 
   const [running, setRunning] = useState(false);
   const [fraction, setFraction] = useState(0);
+  const [detail, setDetail] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -47,6 +48,7 @@ export function AutoSuggestCues() {
     setError(null);
     setMessage(null);
     setFraction(0);
+    setDetail(undefined);
     try {
       const mix = await adapter.readDeckAsset(deck.id, deck.audio.path);
 
@@ -58,7 +60,10 @@ export function AutoSuggestCues() {
       const { times, source, note } = await cuesForAudio(mix, sectionsOfSlides(deck.slides), {
         vocals,
         signal: controller.signal,
-        onProgress: setFraction,
+        onProgress: (f, d) => {
+          setFraction(f);
+          setDetail(d);
+        },
       });
       const applied = setSlideCues(deck.slides.map((_, index) => ({ index, seconds: times[index] })));
       const placed = times.filter((t) => t !== undefined).length;
@@ -92,7 +97,7 @@ export function AutoSuggestCues() {
       ) : (
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-[11px] text-neutral-300">
-            <span>Analysing…</span>
+            <span>{detail ?? "Analysing"}…</span>
             <button
               onClick={() => abortRef.current?.abort()}
               className="ml-auto text-neutral-500 hover:text-red-400"

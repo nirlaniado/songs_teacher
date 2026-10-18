@@ -1,6 +1,5 @@
-import { emissionsFor, SECONDS_PER_FRAME, type AlignProgress, type RunSession } from "./alignModel.js";
+import { emissionsFor, onnxSession, SECONDS_PER_FRAME, type AlignProgress, type RunSession } from "./alignModel.js";
 import { forcedAlign, normalizeForVocab, VOCAB } from "./ctcAlign.js";
-import type { SectionMatch } from "./lyricSync.js";
 
 /**
  * Finds where each section's known lyrics are sung, for `planFromMatches`.
@@ -17,6 +16,8 @@ import type { SectionMatch } from "./lyricSync.js";
  * that aren't sung lands says nothing about where the song has got to, and
  * trusting it could skip the next real section.
  */
+
+export interface SectionMatch { start: number; end: number }
 
 /** Long enough to hold a section plus an instrumental break before it; memory grows linearly with it. */
 export const WINDOW_SECONDS = 60;
@@ -70,13 +71,18 @@ export const WORST_CASE_ALIGNMENT_BYTES = alignmentBytes(WINDOW_FRAMES, MAX_SECT
 export async function alignSections(
   audio: { mix: Float32Array; vocals?: Float32Array },
   sections: ReadonlyArray<{ lyrics?: readonly string[] }>,
-  opts: { run?: RunSession; onProgress?: (p: AlignProgress) => void } = {},
+  opts: { run?: RunSession; onProgress?: (p: AlignProgress) => void; signal?: AbortSignal } = {},
 ): Promise<Array<SectionMatch | null>> {
   const out: Array<SectionMatch | null> = sections.map(() => null);
   const tokens = sections.map((s) => normalizeForVocab((s.lyrics ?? []).join(" ")));
   if (!tokens.some((t) => t.length > 0 && t.length <= MAX_SECTION_TOKENS)) return out;
 
-  const { logits, frames, vocabSize } = await emissionsFor(audio.vocals ?? audio.mix, opts.onProgress, opts.run);
+  const { signal } = opts;
+  const session = opts.run ?? onnxSession(opts.onProgress, undefined, signal);
+  // A chunk already inside ONNX Runtime can't be interrupted, so a cancel stops waiting for it (it finishes unseen in
+  // the background) and no further chunk starts. The model download itself is cancelled through the same signal.
+  const run: RunSession = (input) => untilAborted(session(input), signal);
+  const { logits, frames, vocabSize } = await emissionsFor(audio.vocals ?? audio.mix, opts.onProgress, run);
   const row = (f: number) => logits.subarray(f * vocabSize, (f + 1) * vocabSize);
 
   /** The best placement of `ids` in frames [from, to), with its confidence, or null if it cannot fit. */
@@ -123,6 +129,7 @@ export async function alignSections(
 
   let anchor = 0;
   for (const [i, section] of tokens.entries()) {
+    if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
     if (section.length === 0 || section.length > MAX_SECTION_TOKENS) continue;
     const ids = section.map((t) => (VOCAB as readonly string[]).indexOf(t));
     for (let from = anchor; from < frames; from += STEP_FRAMES) {
@@ -137,6 +144,17 @@ export async function alignSections(
     }
   }
   return out;
+}
+
+function untilAborted<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  const aborted = () => new DOMException("Analysis cancelled", "AbortError");
+  if (signal.aborted) return Promise.reject(aborted());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(aborted());
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
 }
 
 /** Softmax probability of `id` in one frame of logits. */
