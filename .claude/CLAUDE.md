@@ -541,7 +541,9 @@ agent-to-agent chain has no supervisor and can deadlock with nothing on screen.
 **Escalation:** `pm` decides naming, style, test placement and scope trims. The user decides a
 `CLAUDE.md` hard-rule dispute, any schema/migration or architectural change, anything
 security-touching, and any `dev`/`review` disagreement still live after one exchange. A `blocked`
-agent raises a desktop notification and waits — `pm` never answers an approval for the user.
+agent raises a desktop notification and waits — `pm` answers **nothing** on the user's behalf, not a
+tool-permission prompt and not a question the seat aims at `pm` itself. A recommendation is fine; a
+keypress in that pane is not.
 
 **Concurrency:** one `dev` seat; a second only once the merge queue clears comfortably; hard cap
 of two. The user is the only merger, so extra branches lengthen their queue rather than shipping
