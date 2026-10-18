@@ -1,7 +1,7 @@
 import type { Slide } from "../schema/deck.js";
 import { ALIGN_SAMPLE_RATE, type AlignProgress, type RunSession } from "./alignModel.js";
 import { decodeMono } from "./decodeMono.js";
-import { analyse, firstOnset, planCues, planFromMatches, type PlanSection } from "./segment.js";
+import { analyse, firstOnset, hasCoverSlide, planCues, planFromMatches, type PlanSection } from "./segment.js";
 import { alignSections } from "./sectionAlign.js";
 
 const RATE = 22050;
@@ -29,14 +29,17 @@ export interface AutoCueResult {
 
 /** What the planner knows about each slide when only the deck is available: its name, chord-line count and lyrics. */
 export function sectionsOfSlides(slides: readonly Slide[]): PlanSection[] {
-  return slides.map((slide) => {
+  const sections = slides.map((slide) => {
     const tab = slide.elements.find((el) => el.kind === "tab");
-    const lines = tab && tab.text.trim() ? tab.text.split("\n").length : 0;
-    // A lyric is a line in a layout "body" placeholder, except on the "centered" title-slide layout, whose body holds artist/key/tuning; titles, user-added text boxes and tabs never are.
-    const lyrics = slide.layout === "centered" ? [] : slide.elements.flatMap((el) =>
+    return { name: slide.name, lines: tab && tab.text.trim() ? tab.text.split("\n").length : 0 };
+  });
+  // A lyric is a line in a layout "body" placeholder, except on the cover (as the planner judges it), whose body holds artist/key/tuning; titles, user-added text boxes and tabs never are.
+  const cover = hasCoverSlide(sections);
+  return sections.map((section, i) => {
+    const lyrics = cover && i === 0 ? [] : slides[i]!.elements.flatMap((el) =>
       el.kind === "text" && el.role === "body" ? el.text.split("\n").map((l) => l.trim()).filter(Boolean) : [],
     );
-    return lyrics.length > 0 ? { name: slide.name, lines, lyrics } : { name: slide.name, lines };
+    return lyrics.length > 0 ? { ...section, lyrics } : section;
   });
 }
 

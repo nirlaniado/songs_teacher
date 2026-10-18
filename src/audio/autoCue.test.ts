@@ -72,6 +72,17 @@ describe("sectionsOfSlides", () => {
     for (const leak of ["Verse 1", "Chorus", "Sound of Silence", "Simon", "Key", "Tuning", "Dm", "bend"]) expect(all).not.toContain(leak);
   });
 
+  it("judges the cover by its content, not its layout, so switching layouts doesn't change what counts as a lyric", () => {
+    const cover = laidOut("Title", "titleContent", "The Sound of Silence", ["Simon & Garfunkel\nKey: Dm"]);
+    const verse = laidOut("Verse 1", "titleContent", "Verse 1", ["Hello darkness, my old friend"], [tab("Dm   C")]);
+    const chorus = laidOut("Chorus", "centered", "Chorus", ["And the vision"], [tab("F   C")]);
+    expect(sectionsOfSlides([cover, verse, chorus])).toEqual([
+      { name: "Title", lines: 0 },
+      { name: "Verse 1", lines: 1, lyrics: ["Hello darkness, my old friend"] },
+      { name: "Chorus", lines: 1, lyrics: ["And the vision"] },
+    ]);
+  });
+
   it("finds no lyrics in a chord-import deck, whose lyrics live inside the tab element beside the chords", () => {
     const slides = chordDeckSlides({
       source: { id: "1", title: "Hallelujah", artist: "Leonard Cohen", url: "https://example.com", official: true, version: 1, views: 1 },
