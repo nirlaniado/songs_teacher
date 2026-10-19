@@ -78,11 +78,12 @@ export async function alignSections(
   if (!tokens.some((t) => t.length > 0 && t.length <= MAX_SECTION_TOKENS)) return out;
 
   const { signal } = opts;
-  const session = opts.run ?? onnxSession(opts.onProgress, undefined, signal);
-  // A chunk already inside ONNX Runtime can't be interrupted, so a cancel stops waiting for it (it finishes unseen in
-  // the background) and no further chunk starts. The model download itself is cancelled through the same signal.
+  const owned = opts.run ? undefined : onnxSession(opts.onProgress, undefined, signal);
+  const session = opts.run ?? owned!;
+  // A cancel rejects the chunk in flight at once and no further chunk starts; the real session also stops its worker.
   const run: RunSession = (input) => untilAborted(session(input), signal);
-  const { logits, frames, vocabSize } = await emissionsFor(audio.vocals ?? audio.mix, opts.onProgress, run);
+  // The worker holds the model's memory until it is closed, and inference is finished once the logits are in.
+  const { logits, frames, vocabSize } = await emissionsFor(audio.vocals ?? audio.mix, opts.onProgress, run).finally(() => owned?.close());
   const row = (f: number) => logits.subarray(f * vocabSize, (f + 1) * vocabSize);
 
   /** The best placement of `ids` in frames [from, to), with its confidence, or null if it cannot fit. */

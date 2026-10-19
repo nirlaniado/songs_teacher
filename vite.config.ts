@@ -28,5 +28,7 @@ export default defineConfig({
   preview: { headers: crossOriginIsolation, proxy: { "/api/ug": "http://127.0.0.1:4318" } },
   // Pre-bundling the ORT WASM bundle breaks its worker/wasm asset resolution.
   optimizeDeps: { exclude: ["onnxruntime-web"] },
+  // The lyric alignment worker imports ONNX Runtime dynamically, and only ES-module workers can split chunks.
+  worker: { format: "es" },
   test: { exclude: ["**/node_modules/**", "**/dist*/**"] },
 });

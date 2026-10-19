@@ -99,8 +99,8 @@ export function normalize(samples: Float32Array): Float32Array {
  */
 export async function emissionsFor(
   samples: Float32Array,
-  onProgress: (p: AlignProgress) => void = () => {},
-  run: RunSession = onnxSession(onProgress),
+  onProgress: ((p: AlignProgress) => void) | undefined,
+  run: RunSession,
 ): Promise<Emissions> {
   const vocabSize = VOCAB.length;
   const frames = framesFor(samples.length);
@@ -116,32 +116,120 @@ export async function emissionsFor(
       throw new Error(`Alignment model returned ${out.frames} frames (${out.logits.length} values) for ${chunk.length} samples; expected ${expected} × ${vocabSize}.`);
     const offset = chunk.start / SAMPLES_PER_FRAME;
     logits.set(out.logits.subarray((chunk.keepFrom - offset) * vocabSize, (chunk.keepTo - offset) * vocabSize), chunk.keepFrom * vocabSize);
-    onProgress({ stage: "inferring", fraction: (i + 1) / chunks.length, detail: `chunk ${i + 1} of ${chunks.length}` });
+    onProgress?.({ stage: "inferring", fraction: (i + 1) / chunks.length, detail: `chunk ${i + 1} of ${chunks.length}` });
   }
   return { logits, frames, vocabSize, secondsPerFrame: SECONDS_PER_FRAME };
 }
 
-/** The real inference call. Downloads and opens the model on first use, then reuses the session. `signal` cancels the download. */
-export function onnxSession(onProgress: (p: AlignProgress) => void = () => {}, modelUrl = ALIGN_MODEL_URL, signal?: AbortSignal): RunSession {
-  let ready: ReturnType<typeof open> | undefined;
+/** One message to the alignment worker: the model bytes to open, or a chunk to infer. */
+export type AlignRequest = { id: number; model: ArrayBuffer } | { id: number; input: Float32Array };
+export type AlignReply = { id: number; error?: string; logits?: Float32Array; frames?: number };
+export type AlignWorker = Pick<Worker, "postMessage" | "terminate" | "onmessage" | "onerror">;
+
+const spawnAlignWorker = (): AlignWorker => new Worker(new URL("./alignWorker.ts", import.meta.url), { type: "module" });
+
+/**
+ * The real inference call. Downloads the model on first use, then reuses the session. `signal` cancels the download
+ * and any chunk in flight. `close` releases the worker and the model's memory with it.
+ *
+ * ONNX Runtime's WASM backend compiles the graph and runs each chunk synchronously on whichever thread calls it, so
+ * here that is a worker of our own: on the page, opening the model and every 30 s chunk froze the tab into Chrome's
+ * "Page Unresponsive" dialog, and a cancel couldn't even be clicked. Its own worker, rather than ORT's proxy worker,
+ * because `ort.env` is shared with stem separation and the proxy setting only takes effect before ORT's first use; and
+ * because terminating the worker is the only way to stop a chunk already running. The cost is one copy of each chunk's
+ * input (~1.9 MB) and logits (~190 KB) across the boundary, transferred rather than cloned, so the song's normalised
+ * waveform is never copied whole and the stitched logits stay on this side as before.
+ */
+export function onnxSession(
+  onProgress: (p: AlignProgress) => void = () => {},
+  modelUrl = ALIGN_MODEL_URL,
+  signal?: AbortSignal,
+  spawn: () => AlignWorker = spawnAlignWorker,
+): RunSession & { close(): void } {
+  let worker: AlignWorker | undefined;
+  let ready: Promise<void> | undefined;
+  let nextId = 0;
+  const pending = new Map<number, { resolve: (reply: AlignReply) => void; reject: (error: unknown) => void }>();
+  const cancelled = () => new DOMException("Analysis cancelled", "AbortError");
+
+  function stop(error: unknown) {
+    worker?.terminate();
+    worker = undefined;
+    ready = undefined;
+    for (const { reject } of pending.values()) reject(error);
+    pending.clear();
+  }
+  signal?.addEventListener("abort", () => stop(cancelled()), { once: true });
+
+  function start(): AlignWorker {
+    const w = spawn();
+    w.onmessage = ({ data }: MessageEvent<AlignReply>) => {
+      const call = pending.get(data.id);
+      pending.delete(data.id);
+      if (data.error === undefined) call?.resolve(data);
+      else call?.reject(new Error(data.error));
+    };
+    w.onerror = (event: ErrorEvent) => stop(new Error(`The lyric alignment worker failed${event.message ? `: ${event.message}` : ""}.`));
+    return w;
+  }
+
+  function call(request: Omit<AlignRequest, "id">, transfer: Transferable[]): Promise<AlignReply> {
+    if (signal?.aborted) return Promise.reject(cancelled());
+    worker ??= start();
+    const id = nextId++;
+    const w = worker;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      w.postMessage({ ...request, id }, transfer);
+    });
+  }
+
   async function open() {
-    const ort = await import("onnxruntime-web");
     onProgress({ stage: "downloading", fraction: 0 });
-    const bytes = await loadModelBytes(modelUrl, (loaded, total) =>
+    const model = await loadModelBytes(modelUrl, (loaded, total) =>
       onProgress({ stage: "downloading", fraction: total ? loaded / total : null, detail: `${Math.round(loaded / 1e6)}${total ? ` / ${Math.round(total / 1e6)}` : ""} MB` }), signal);
     onProgress({ stage: "loading", fraction: null });
+    await call({ model }, [model]);
+    onProgress({ stage: "inferring", fraction: 0 });
+  }
+
+  const run: RunSession = async input => {
+    ready ??= open().catch(error => { ready = undefined; throw error; });
+    await ready;
+    const chunk = input.slice();
+    const { logits, frames } = await call({ input: chunk }, [chunk.buffer]);
+    return { logits: logits!, frames: frames! };
+  };
+  return Object.assign(run, { close: () => stop(cancelled()) });
+}
+
+/** The worker's side of `onnxSession`: opens the model, then infers each chunk it is sent. `post` replies to the page. */
+export function alignWorkerHandler(post: (reply: AlignReply, transfer: Transferable[]) => void) {
+  let opened: Promise<{ ort: typeof import("onnxruntime-web"); session: import("onnxruntime-web").InferenceSession }> | undefined;
+  async function open(model: ArrayBuffer) {
+    const ort = await import("onnxruntime-web");
     // WASM only: the quantized graph's DynamicQuantizeLinear/MatMulInteger nodes have no WebGPU kernels in ORT Web, so WebGPU only adds partition crossings. Benchmark before re-adding it (an fp32 override is where it might help).
-    const session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "basic" });
+    const session = await ort.InferenceSession.create(new Uint8Array(model), { executionProviders: ["wasm"], graphOptimizationLevel: "basic" });
     if (session.inputNames.length !== 1 || session.inputNames[0] !== INPUT_NAME || !session.outputNames.includes(OUTPUT_NAME))
       throw new Error(`Alignment model has inputs [${session.inputNames.join(", ")}] and outputs [${session.outputNames.join(", ")}]; expected only input "${INPUT_NAME}" and an output "${OUTPUT_NAME}".`);
-    onProgress({ stage: "inferring", fraction: 0 });
     return { ort, session };
   }
-  return async input => {
-    ready ??= open().catch(error => { ready = undefined; throw error; });
-    const { ort, session } = await ready;
-    const result = await session.run({ [INPUT_NAME]: new ort.Tensor("float32", input, [1, input.length]) });
-    const tensor = result[OUTPUT_NAME]!;
-    return { logits: tensor.data as Float32Array, frames: tensor.dims[1] ?? 0 };
+  return async (request: AlignRequest) => {
+    try {
+      if ("model" in request) {
+        opened = open(request.model);
+        await opened;
+        return post({ id: request.id }, []);
+      }
+      if (!opened) throw new Error("The alignment model was not opened before inference.");
+      const { ort, session } = await opened;
+      const result = await session.run({ [INPUT_NAME]: new ort.Tensor("float32", request.input, [1, request.input.length]) });
+      const tensor = result[OUTPUT_NAME]!;
+      // A copy, so the buffer transferred back is one this chunk owns outright, never a view into ORT's (possibly shared) memory.
+      const logits = (tensor.data as Float32Array).slice();
+      post({ id: request.id, logits, frames: tensor.dims[1] ?? 0 }, [logits.buffer]);
+    } catch (error) {
+      post({ id: request.id, error: error instanceof Error ? error.message : String(error) }, []);
+    }
   };
 }
