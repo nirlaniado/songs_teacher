@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Slide } from "../schema/deck.js";
-import { framesFor, type RunSession } from "./alignModel.js";
+import { alignWorkerHandler, framesFor, type AlignReply, type AlignRequest, type RunSession } from "./alignModel.js";
 import { cuesForAudio, sectionsOfSlides } from "./autoCue.js";
 import { normalizeForVocab, VOCAB } from "./ctcAlign.js";
 import * as decode from "./decodeMono.js";
@@ -148,6 +148,13 @@ describe("cuesForAudio", () => {
     });
     alignSections.mockClear();
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("no network in this test"); }));
+    // Node has no Worker: the real worker code runs on this thread instead.
+    vi.stubGlobal("Worker", class {
+      onmessage: ((e: { data: AlignReply }) => void) | null = null;
+      private handle = alignWorkerHandler((reply) => this.onmessage?.({ data: reply }));
+      postMessage(request: AlignRequest) { void this.handle(request); }
+      terminate() {}
+    });
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 

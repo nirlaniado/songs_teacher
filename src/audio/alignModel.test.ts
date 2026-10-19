@@ -1,6 +1,10 @@
+import { Worker as Thread } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VOCAB } from "./ctcAlign.js";
-import { SAMPLES_PER_FRAME, emissionsFor, framesFor, normalize, onnxSession, planChunks, type RunSession } from "./alignModel.js";
+import {
+  SAMPLES_PER_FRAME, alignWorkerHandler, emissionsFor, framesFor, normalize, onnxSession, planChunks,
+  type AlignReply, type AlignRequest, type AlignWorker, type RunSession,
+} from "./alignModel.js";
 
 const ort = vi.hoisted(() => {
   const state = { inputNames: ["input_values"], outputNames: ["logits"], run: vi.fn(), tensors: [] as unknown[][], create: vi.fn() };
@@ -152,7 +156,7 @@ describe("emissionsFor", () => {
       return { logits: { data: new Float32Array(frames * V), dims: [1, frames, V] } };
     });
     const progress = vi.fn();
-    await emissionsFor(noise(70 * SECONDS), progress);
+    await emissionsFor(noise(70 * SECONDS), progress, onnxSession(progress, undefined, undefined, inProcess));
     const events = progress.mock.calls.map(([p]) => p as { stage: string; fraction: number | null });
     expect([...new Set(events.map(e => e.stage))]).toEqual(["downloading", "loading", "inferring"]);
     const order = ["downloading", "loading", "inferring"];
@@ -165,11 +169,19 @@ describe("emissionsFor", () => {
   });
 });
 
+/** The real worker code, run on this thread against the mocked ONNX Runtime. */
+function inProcess(): AlignWorker {
+  const worker = { onmessage: null as ((e: { data: AlignReply }) => void) | null, onerror: null, terminate() {}, postMessage: (m: AlignRequest) => void handle(m) };
+  const handle = alignWorkerHandler((reply) => worker.onmessage?.({ data: reply }));
+  return worker as unknown as AlignWorker;
+}
+const session = () => onnxSession(undefined, undefined, undefined, inProcess);
+
 describe("onnxSession", () => {
   afterEach(() => { ort.inputNames = ["input_values"]; ort.outputNames = ["logits"]; });
   it("feeds input_values and reads logits", async () => {
     ort.run.mockResolvedValue({ logits: { data: new Float32Array(2 * V), dims: [1, 2, V] } });
-    const out = await onnxSession()(new Float32Array(720));
+    const out = await session()(new Float32Array(720));
     expect(out.frames).toBe(2);
     expect(Object.keys(ort.run.mock.calls[0]![0])).toEqual(["input_values"]);
     expect(ort.tensors.at(-1)).toEqual(["float32", expect.any(Float32Array), [1, 720]]);
@@ -177,21 +189,85 @@ describe("onnxSession", () => {
   it("fails clearly before inference when the model's tensor names differ", async () => {
     ort.run.mockClear();
     ort.inputNames = ["input"]; ort.outputNames = ["output"];
-    await expect(onnxSession()(new Float32Array(720))).rejects.toThrow(/inputs \[input\] and outputs \[output\]; expected only input "input_values" and an output "logits"/);
+    await expect(session()(new Float32Array(720))).rejects.toThrow(/inputs \[input\] and outputs \[output\]; expected only input "input_values" and an output "logits"/);
     expect(ort.run).not.toHaveBeenCalled();
   });
   it("rejects a model that requires an input besides input_values", async () => {
     ort.inputNames = ["input_values", "attention_mask"];
-    await expect(onnxSession()(new Float32Array(720))).rejects.toThrow(/inputs \[input_values, attention_mask\].*expected only input "input_values"/);
+    await expect(session()(new Float32Array(720))).rejects.toThrow(/inputs \[input_values, attention_mask\].*expected only input "input_values"/);
   });
   it("retries opening the model after a failed download instead of caching the failure", async () => {
     ort.run.mockResolvedValue({ logits: { data: new Float32Array(2 * V), dims: [1, 2, V] } });
     ort.create.mockClear();
     ort.create.mockRejectedValueOnce(new Error("network down"));
-    const run = onnxSession();
+    const run = session();
     await expect(run(new Float32Array(720))).rejects.toThrow("network down");
     expect((await run(new Float32Array(720))).frames).toBe(2);
     expect((await run(new Float32Array(720))).frames).toBe(2);
     expect(ort.create).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("onnxSession off the page's thread", () => {
+  const BLOCK_MS = 1500;
+
+  /** A worker that opens instantly, then blocks its thread synchronously for BLOCK_MS on every chunk, as WASM inference does. */
+  function blockingThread() {
+    const thread = new Thread(`
+      const { parentPort } = require("node:worker_threads");
+      parentPort.on("message", ({ id, input }) => {
+        if (input === undefined) return parentPort.postMessage({ id });
+        parentPort.postMessage({ id: -1 });
+        const until = Date.now() + ${BLOCK_MS};
+        while (Date.now() < until);
+        parentPort.postMessage({ id, logits: new Float32Array(2 * ${V}), frames: 2 });
+      });`, { eval: true });
+    const state = { busy: false, exited: new Promise<void>((resolve) => thread.once("exit", () => resolve())) };
+    const worker = {
+      onmessage: null as ((e: { data: AlignReply }) => void) | null, onerror: null,
+      postMessage: (m: AlignRequest, transfer: ArrayBuffer[]) => thread.postMessage(m, transfer),
+      terminate: () => void thread.terminate(),
+    };
+    thread.on("message", (data: AlignReply) => { if (data.id === -1) state.busy = true; else worker.onmessage?.({ data }); });
+    return { spawn: () => worker as unknown as AlignWorker, state };
+  }
+
+  /** The same blocking chunk, but run on the calling thread — what calling ONNX Runtime from the page amounts to. */
+  function blockingSameThread(): () => AlignWorker {
+    const worker = {
+      onmessage: null as ((e: { data: AlignReply }) => void) | null, onerror: null, terminate() {},
+      postMessage({ id, ...request }: AlignRequest) {
+        if ("input" in request) { const until = Date.now() + BLOCK_MS; while (Date.now() < until); }
+        setTimeout(() => worker.onmessage?.({ data: "input" in request ? { id, logits: new Float32Array(2 * V), frames: 2 } : { id } }));
+      },
+    };
+    return () => worker as unknown as AlignWorker;
+  }
+
+  /** Starts a chunk, asks to cancel 200 ms in, and measures how late that request ran and how long the chunk took to give up. */
+  async function cancelDuringChunk(spawn: () => AlignWorker) {
+    const controller = new AbortController();
+    const t0 = performance.now();
+    const outcome = onnxSession(undefined, "model", controller.signal, spawn)(new Float32Array(720)).then(() => "finished", (e: Error) => e.name);
+    let firedAt = 0;
+    setTimeout(() => { firedAt = performance.now(); controller.abort(); }, 200);
+    const result = await outcome;
+    return { result, timerLate: firedAt - t0 - 200, settledAfter: performance.now() - t0 };
+  }
+
+  it("keeps the page's thread free while a chunk blocks, and a cancel during it ends it at once", async () => {
+    const { spawn, state } = blockingThread();
+    const probe = await cancelDuringChunk(spawn);
+    expect(state.busy).toBe(true);
+    expect(probe.result).toBe("AbortError");
+    expect(probe.timerLate).toBeLessThan(150);
+    expect(probe.settledAfter).toBeLessThan(BLOCK_MS / 2);
+    await state.exited;
+  });
+
+  it("would catch a chunk that blocks the calling thread, which a pending promise never models", async () => {
+    const probe = await cancelDuringChunk(blockingSameThread());
+    expect(probe.timerLate).toBeGreaterThan(BLOCK_MS - 300);
+    expect(probe.settledAfter).toBeGreaterThan(BLOCK_MS);
   });
 });
