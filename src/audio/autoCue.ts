@@ -33,12 +33,12 @@ export function sectionsOfSlides(slides: readonly Slide[]): PlanSection[] {
     const tab = slide.elements.find((el) => el.kind === "tab");
     return { name: slide.name, lines: tab && tab.text.trim() ? tab.text.split("\n").length : 0 };
   });
-  // A lyric is a line in a layout "body" placeholder, except on the cover (as the planner judges it), whose body holds artist/key/tuning; titles, user-added text boxes and tabs never are.
+  // Lyrics stored at chord import come first. Otherwise (a hand-built deck) a lyric is a line in a layout "body" placeholder, except on the cover (as the planner judges it), whose body holds artist/key/tuning; titles, user-added text boxes and tabs never are.
   const cover = hasCoverSlide(sections);
   return sections.map((section, i) => {
-    const lyrics = cover && i === 0 ? [] : slides[i]!.elements.flatMap((el) =>
+    const lyrics = slides[i]!.lyrics ?? (cover && i === 0 ? [] : slides[i]!.elements.flatMap((el) =>
       el.kind === "text" && el.role === "body" ? el.text.split("\n").map((l) => l.trim()).filter(Boolean) : [],
-    );
+    ));
     return lyrics.length > 0 ? { ...section, lyrics } : section;
   });
 }

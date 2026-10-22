@@ -83,21 +83,28 @@ describe("sectionsOfSlides", () => {
     ]);
   });
 
-  it("finds no lyrics in a chord-import deck, whose lyrics live inside the tab element beside the chords", () => {
-    const slides = chordDeckSlides({
-      source: { id: "1", title: "Hallelujah", artist: "Leonard Cohen", url: "https://example.com", official: true, version: 1, views: 1 },
-      retrievedAt: "2026-01-01T00:00:00.000Z", selection: "official", warning: null, capo: 5, tuning: "E A D G B E", key: "C",
-      lines: [
-        { section: "Verse 1", sourceLine: 0, chords: ["C", "Am"], row: "C   Am", lyric: "I heard there was a secret chord" },
-        { section: "Chorus", sourceLine: 1, chords: ["F", "Am"], row: "F   Am", lyric: "Hallelujah" },
-      ],
-      uniqueChords: ["C", "Am", "F"], chart: "",
-    }, newId);
-    expect(sectionsOfSlides(slides)).toEqual([
+  const hallelujah = () => chordDeckSlides({
+    source: { id: "1", title: "Hallelujah", artist: "Leonard Cohen", url: "https://example.com", official: true, version: 1, views: 1 },
+    retrievedAt: "2026-01-01T00:00:00.000Z", selection: "official", warning: null, capo: 5, tuning: "E A D G B E", key: "C",
+    lines: [
+      { section: "Verse 1", sourceLine: 0, chords: ["C", "Am"], row: "C   Am", lyric: "I heard there was a secret chord" },
+      { section: "Chorus", sourceLine: 1, chords: ["F", "Am"], row: "F   Am", lyric: "Hallelujah" },
+    ],
+    uniqueChords: ["C", "Am", "F"], chart: "",
+  }, newId);
+
+  it("takes a chord-import deck's stored lyrics, and none for its cover", () => {
+    expect(sectionsOfSlides(hallelujah())).toEqual([
       { name: "Title", lines: 0 },
-      { name: "Verse 1", lines: 2 },
-      { name: "Chorus", lines: 2 },
+      { name: "Verse 1", lines: 2, lyrics: ["I heard there was a secret chord"] },
+      { name: "Chorus", lines: 2, lyrics: ["Hallelujah"] },
     ]);
+  });
+
+  it("prefers a slide's stored lyrics over its body text, and uses the body text when none are stored", () => {
+    const both = { ...laidOut("Verse 1", "titleContent", "Verse 1", ["Typed on the slide"]), lyrics: ["From the chart"] };
+    const typed = laidOut("Chorus", "titleContent", "Chorus", ["Typed on the slide"]);
+    expect(sectionsOfSlides([both, typed]).map((s) => s.lyrics)).toEqual([["From the chart"], ["Typed on the slide"]]);
   });
 
   it("handles a slide with no text, a lone slide and an empty deck", () => {
@@ -204,6 +211,23 @@ describe("cuesForAudio", () => {
     expect(unsung).toMatchObject({ source: "music" });
     expect(unsung.note).toBeUndefined();
     expect(alignSections).not.toHaveBeenCalled();
+  });
+
+  it("aligns a chord-imported deck's lyrics against its vocals stem when re-cued", async () => {
+    alignSections.mockResolvedValueOnce([null, { start: 2, end: 8 }, { start: 12, end: 20 }]);
+    const slides = chordDeckSlides({
+      source: { id: "1", title: "Song", artist: "Artist", url: "https://example.com", official: true, version: 1, views: 1 },
+      retrievedAt: "2026-01-01T00:00:00.000Z", selection: "official", warning: null, capo: null, tuning: null, key: null,
+      lines: [
+        { section: "Verse 1", sourceLine: 0, chords: ["G"], row: "G", lyric: sections[0]!.lyrics[0]! },
+        { section: "Chorus", sourceLine: 1, chords: ["C"], row: "C", lyric: sections[1]!.lyrics[0]! },
+      ],
+      uniqueChords: ["G", "C"], chart: "",
+    }, () => crypto.randomUUID());
+    await cuesForAudio(mix, sectionsOfSlides(slides), { vocals });
+    const [audio, planned] = alignSections.mock.calls[0]!;
+    expect(audio.vocals).toBe(fileAt("vocals", 16000));
+    expect(planned.map((s) => s.lyrics)).toEqual([undefined, ...sections.map((s) => s.lyrics)]);
   });
 
   it("decodes each file once, at both rates, and aligns the vocals stem when there is one", async () => {

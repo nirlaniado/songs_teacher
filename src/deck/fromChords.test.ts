@@ -129,6 +129,21 @@ describe("chordDeckSlides — section slide content", () => {
     );
   });
 
+  it("stores each section's lyric lines on its slide, and none on the cover or an instrumental section", () => {
+    const slides = chordDeckSlides(
+      result({
+        lines: [
+          chordLine("Intro", ["G", "D"]),
+          chordLine("Verse 1", ["G"], "When I find myself"),
+          chordLine("Verse 1", ["D"]),
+          chordLine("Verse 1", ["Em"], "Mother Mary comes to me"),
+        ],
+      }),
+      idCounter(),
+    );
+    expect(slides.map((s) => s.lyrics)).toEqual([undefined, undefined, ["When I find myself", "Mother Mary comes to me"]]);
+  });
+
   it("gives the tab element the body frame's box geometry", () => {
     const slides = chordDeckSlides(result({ lines: [chordLine("Verse 1", ["G"])] }), idCounter());
     const tab = slides[1]!.elements.find((el) => el.kind === "tab")!;
