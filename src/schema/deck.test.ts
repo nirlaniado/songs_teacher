@@ -267,6 +267,26 @@ describe("stems", () => {
   });
 });
 
+describe("Slide.lyrics", () => {
+  const now = new Date().toISOString();
+  const v2 = (slide: Record<string, unknown>) => ({
+    schemaVersion: 2, id: uuid(), title: "Deck", theme: { background: { kind: "color", color: "#ffffff" } },
+    slides: [{ id: uuid(), name: "Verse 1", layout: "titleContent", elements: [], ...slide }], createdAt: now, updatedAt: now,
+  });
+
+  it("is absent on a v2 deck saved before it existed, which still validates with no migration", () => {
+    const deck = parseDeck(v2({}));
+    expect(deck.schemaVersion).toBe(DECK_SCHEMA_VERSION);
+    expect(deck.slides[0]!.lyrics).toBeUndefined();
+    expect(Slide.safeParse(v2({}).slides[0]).success).toBe(true);
+  });
+
+  it("survives saving and reloading", () => {
+    const saved = JSON.stringify(parseDeck(v2({ lyrics: ["Hello darkness, my old friend", "I've come to talk with you again"] })));
+    expect(parseDeck(JSON.parse(saved)).slides[0]!.lyrics).toEqual(["Hello darkness, my old friend", "I've come to talk with you again"]);
+  });
+});
+
 describe("migrateDeck v1 -> v2", () => {
   function v1(over: Record<string, unknown> = {}) {
     const now = new Date().toISOString();

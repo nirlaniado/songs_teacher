@@ -183,6 +183,13 @@ export const Slide = z.object({
    * auto-advance skips over it. This is the whole music-sync feature.
    */
   startTime: z.number().nonnegative().optional(),
+  /**
+   * The chart's lyric lines for this section, stored at chord import so later re-cueing can align them.
+   * They duplicate the lyric rows inside the slide's tab text and go stale if that is hand-edited — accepted, because
+   * telling lyric rows from chord rows there is a guess, and a wrong guess misplaces slides where none degrades to music.
+   * Optional and additive, as with `DeckAudio.stems`: v2 decks validate unchanged, so no version bump and no migration.
+   */
+  lyrics: z.array(z.string()).optional(),
 });
 export type Slide = z.infer<typeof Slide>;
 

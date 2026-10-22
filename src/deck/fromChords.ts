@@ -121,11 +121,13 @@ function sectionSlide(group: LabelledGroup, newId: () => string): Slide {
     style: { fontSize: 20, lineHeight: 1.3, valign: "top" },
   };
 
+  const lyrics = group.lines.flatMap((line) => (line.lyric ? [line.lyric] : []));
   return {
     id: newId(),
     name: group.label,
     layout: "titleContent",
     elements: [...elements.filter((el) => el !== body), tab],
+    ...(lyrics.length > 0 ? { lyrics } : {}),
   };
 }
 
