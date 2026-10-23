@@ -61,6 +61,7 @@ export function StemMixer() {
               <button
                 onClick={() => setStemMix(toggleStem(stemMix, stem.id, "muted"))}
                 title="Mute"
+                aria-label={`Mute ${STEM_LABEL[stem.id]}`}
                 className={`w-6 rounded px-1 py-0.5 text-[10px] font-medium ${
                   stem.muted ? "bg-red-800 text-white" : "bg-neutral-800 text-neutral-400"
                 }`}
@@ -70,6 +71,7 @@ export function StemMixer() {
               <button
                 onClick={() => setStemMix(toggleStem(stemMix, stem.id, "soloed"))}
                 title="Solo"
+                aria-label={`Solo ${STEM_LABEL[stem.id]}`}
                 className={`w-6 rounded px-1 py-0.5 text-[10px] font-medium ${
                   stem.soloed ? "bg-amber-600 text-white" : "bg-neutral-800 text-neutral-400"
                 }`}
@@ -84,6 +86,7 @@ export function StemMixer() {
                 step={0.05}
                 value={stem.gain}
                 onChange={(e) => setStemMix(setStemGain(stemMix, stem.id, Number(e.target.value)))}
+                aria-label={`${STEM_LABEL[stem.id]} volume`}
                 className="h-1 flex-1 accent-sky-500"
               />
             </div>

@@ -257,6 +257,7 @@ function ElementProps({ element }: { element: SlideElement }) {
             {(["bold", "italic", "underline"] as const).map((k) => (
               <button
                 key={k}
+                aria-label={k[0]!.toUpperCase() + k.slice(1)}
                 onClick={() =>
                   patch((el) =>
                     el.kind === "text" ? { ...el, style: { ...el.style, [k]: !el.style[k] } } : el,
@@ -572,6 +573,7 @@ export function PropertiesPanel() {
                 <button
                   key={l.id}
                   title={l.label}
+                  aria-label={l.label}
                   disabled={!slide}
                   onClick={() => setSlideLayout(current, l.id)}
                   className={`aspect-[16/10] rounded border-2 p-1 disabled:opacity-30 ${

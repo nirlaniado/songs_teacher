@@ -138,6 +138,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         onChange={(e) => setTitle(e.target.value)}
         className="mr-2 w-52 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-neutral-100 hover:border-neutral-700 focus:border-neutral-600 focus:outline-none"
         placeholder="Untitled presentation"
+        aria-label="Presentation title"
       />
 
       <span className="mx-1 h-4 w-px bg-neutral-800" />
@@ -243,6 +244,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={!hasSelection}
         onClick={() => arrangeSelection("front")}
         title="Bring to front (Ctrl+Shift+Home)"
+        aria-label="Bring to front"
       >
         ⤒
       </button>
@@ -251,6 +253,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={!hasSelection}
         onClick={() => arrangeSelection("forward")}
         title="Bring forward (Ctrl+Shift+↑)"
+        aria-label="Bring forward"
       >
         ↑
       </button>
@@ -259,6 +262,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={!hasSelection}
         onClick={() => arrangeSelection("backward")}
         title="Send backward (Ctrl+Shift+↓)"
+        aria-label="Send backward"
       >
         ↓
       </button>
@@ -267,6 +271,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={!hasSelection}
         onClick={() => arrangeSelection("back")}
         title="Send to back (Ctrl+Shift+End)"
+        aria-label="Send to back"
       >
         ⤓
       </button>
@@ -281,6 +286,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
           disabled={!hasSelection}
           onClick={() => alignSelection(mode)}
           title={selectionCount > 1 ? `${label} (within the selection)` : `${label} (on the slide)`}
+          aria-label={label}
         >
           {glyph}
         </button>
@@ -290,6 +296,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={selectionCount < 3}
         onClick={() => distributeSelection("horizontal")}
         title="Distribute horizontally — needs three or more"
+        aria-label="Distribute horizontally"
       >
         ⇹
       </button>
@@ -298,6 +305,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={selectionCount < 3}
         onClick={() => distributeSelection("vertical")}
         title="Distribute vertically — needs three or more"
+        aria-label="Distribute vertically"
       >
         ⇳
       </button>
@@ -306,6 +314,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         disabled={!hasSelection}
         onClick={duplicateSelection}
         title="Duplicate (Ctrl+D)"
+        aria-label="Duplicate"
       >
         ⧉
       </button>
@@ -317,6 +326,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         className={`${btn} ${showGrid ? "bg-neutral-700" : ""}`}
         onClick={toggleGrid}
         title="Show grid"
+        aria-label="Show grid"
       >
         ▦
       </button>
@@ -324,6 +334,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         className={`${btn} ${snapEnabled ? "bg-neutral-700" : ""}`}
         onClick={toggleSnap}
         title="Snap to guides — hold Alt while dragging to suspend"
+        aria-label="Snap to guides"
       >
         🧲
       </button>
@@ -343,10 +354,10 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
 
       <span className="mx-1 h-4 w-px bg-neutral-800" />
 
-      <button className={btn} onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+      <button className={btn} onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
         ↶
       </button>
-      <button className={btn} onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
+      <button className={btn} onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
         ↷
       </button>
 

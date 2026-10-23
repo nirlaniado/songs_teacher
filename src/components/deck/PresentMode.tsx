@@ -208,7 +208,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
 
       {chrome && (
         <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/85 to-transparent px-5 pb-4 pt-10 text-sm text-neutral-200">
-          <button onClick={() => goTo(index - 1)} disabled={index === 0} className="disabled:opacity-30">
+          <button onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous slide" className="disabled:opacity-30">
             ←
           </button>
           <span className="tabular-nums">
@@ -217,6 +217,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
           <button
             onClick={() => goTo(index + 1)}
             disabled={index >= slides.length - 1}
+            aria-label="Next slide"
             className="disabled:opacity-30"
           >
             →
@@ -227,6 +228,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
               <span className="mx-1 h-4 w-px bg-white/20" />
               <button
                 onClick={player.toggle}
+                aria-label={playing ? "Pause" : "Play"}
                 className="rounded bg-emerald-700 px-2 py-0.5 text-xs text-white"
               >
                 {playing ? "⏸" : "▶"}

@@ -24,6 +24,9 @@ import { StemMixer } from "./StemMixer.js";
  * instant as the previous cued slide (`sameTimeAs`, mapping to the first slide
  * of that run). A slide can be both.
  */
+/** An example cue in the format `formatCue` writes; `parseCue` also takes plain seconds and decimals. */
+export const CUE_PLACEHOLDER = "1:20";
+
 export function cueWarnings(slides: readonly Slide[]): { outOfOrder: Set<number>; sameTimeAs: Map<number, number> } {
   const outOfOrder = new Set<number>();
   const sameTimeAs = new Map<number, number>();
@@ -105,6 +108,7 @@ export function TimingPanel() {
             <button
               onClick={player.toggle}
               disabled={!player.available}
+              aria-label={playing ? "Pause" : "Play"}
               className="rounded bg-emerald-700 px-2 py-0.5 text-xs text-white disabled:opacity-40"
             >
               {playing ? "⏸" : "▶"}
@@ -225,13 +229,14 @@ export function TimingPanel() {
                   <td className="py-1">
                     <input
                       value={drafts[slide.id] ?? (slide.startTime !== undefined ? formatCue(slide.startTime) : "")}
-                      placeholder="—"
+                      placeholder={CUE_PLACEHOLDER}
+                      aria-label={`Cue time for ${slide.name}`}
                       onChange={(e) => setDrafts((d) => ({ ...d, [slide.id]: e.target.value }))}
                       onBlur={() => commitDraft(i, slide.id)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       }}
-                      className={`w-20 rounded border bg-neutral-950 px-1.5 py-0.5 tabular-nums ${
+                      className={`w-20 rounded border bg-neutral-950 px-1.5 py-0.5 tabular-nums placeholder:text-neutral-600 ${
                         bad ? "border-amber-600 text-amber-300" : "border-neutral-700 text-neutral-200"
                       }`}
                     />
@@ -249,6 +254,7 @@ export function TimingPanel() {
                       <button
                         onClick={() => setSlideCue(i, undefined)}
                         title="Clear cue"
+                        aria-label={`Clear cue for ${slide.name}`}
                         className="ml-1 text-[10px] text-neutral-600 hover:text-red-400"
                       >
                         ✕

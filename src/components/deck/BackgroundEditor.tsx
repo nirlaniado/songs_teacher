@@ -118,6 +118,7 @@ export function BackgroundEditor({
                   <button
                     key={src}
                     title={src}
+                    aria-label={`Saved image ${src.split("/").pop()}`}
                     onClick={() => onChange({ ...value, src })}
                     className={`aspect-video overflow-hidden rounded border-2 bg-neutral-950 ${
                       value.src === src ? "border-sky-500" : "border-neutral-700 hover:border-neutral-500"
