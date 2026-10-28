@@ -28,6 +28,7 @@ export function SlidePanel() {
         <button
           onClick={() => addSlide()}
           title="New slide"
+          aria-label="New slide"
           className="rounded bg-neutral-800 px-1.5 text-sm text-neutral-200 hover:bg-neutral-700"
         >
           +
@@ -50,6 +51,7 @@ export function SlidePanel() {
           >
             <button
               onClick={() => selectSlide(i)}
+              aria-label={`Slide ${i + 1}: ${slide.name}`}
               className={`block w-full rounded border-2 ${
                 i === current ? "border-sky-500" : "border-transparent hover:border-neutral-700"
               }`}
@@ -76,6 +78,7 @@ export function SlidePanel() {
               <button
                 onClick={() => duplicateSlide(i)}
                 title="Duplicate"
+                aria-label={`Duplicate slide ${i + 1}`}
                 className="rounded bg-neutral-800/90 px-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
               >
                 ⧉
@@ -85,6 +88,7 @@ export function SlidePanel() {
                   if (confirm(`Delete slide ${i + 1}?`)) deleteSlide(i);
                 }}
                 title="Delete"
+                aria-label={`Delete slide ${i + 1}`}
                 className="rounded bg-neutral-800/90 px-1 text-[10px] text-neutral-300 hover:bg-red-700"
               >
                 ✕

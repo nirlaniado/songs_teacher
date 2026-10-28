@@ -51,6 +51,31 @@ const BEND_MARKS: Array<{ glyph: string; snippet: string; title: string }> = [
   { glyph: "1½", snippet: "1 1/2", title: "Step-and-a-half bend (1 1/2)" },
 ];
 
+const GESTURE_ENDS = ["pointerup", "pointercancel", "blur"] as const;
+
+/**
+ * Runs one pointer gesture: `onMove` until the pointer is released, the browser cancels it, or the window loses it,
+ * then `onEnd` once. Text selection is suppressed page-wide for the gesture only — a standing select-none would also
+ * stop selecting text inside the inline editor — and every way a gesture ends releases it, so none can strand it.
+ */
+export function trackGesture(
+  onMove: (ev: PointerEvent) => void,
+  onEnd: () => void = () => {},
+  target: EventTarget = window,
+  root: { classList: { add(token: string): void; remove(token: string): void } } = document.documentElement,
+) {
+  root.classList.add("select-none");
+  const move = onMove as EventListener;
+  const end = () => {
+    root.classList.remove("select-none");
+    target.removeEventListener("pointermove", move);
+    for (const type of GESTURE_ENDS) target.removeEventListener(type, end);
+    onEnd();
+  };
+  target.addEventListener("pointermove", move);
+  for (const type of GESTURE_ENDS) target.addEventListener(type, end);
+}
+
 function handlePosition(h: Handle): { x: number; y: number } {
   return {
     x: h.includes("w") ? 0 : h.includes("e") ? 1 : 0.5,
@@ -409,13 +434,7 @@ export function SlideCanvas() {
         return origin ? { ...current, x: origin.x + dx, y: origin.y + dy } : current;
       });
     };
-    const onUp = () => {
-      setGuides({ x: [], y: [] });
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    trackGesture(onMove, () => setGuides({ x: [], y: [] }));
   }
 
   /** The detached handle above the selection, as in Impress's rotate mode. */
@@ -447,12 +466,7 @@ export function SlideCanvas() {
           : { ...el, rotation: Math.round(origin + degrees) };
       });
     };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    trackGesture(onMove);
   }
 
   /** Rubber-band selection, started on empty canvas. */
@@ -481,15 +495,11 @@ export function SlideCanvas() {
       const inside = elementsInRect(slide.elements, rect).map((el) => el.id);
       selectElements([...new Set([...base, ...inside])]);
     };
-    const onUp = () => {
+    trackGesture(onMove, () => {
       setMarquee(null);
       // A click with no drag is just "deselect", already done above.
       if (!moved && additive) selectElements(base);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    });
   }
 
   if (!deck) return null;
@@ -864,6 +874,7 @@ export function SlideCanvas() {
               key={snippet}
               type="button"
               title={title}
+              aria-label={title}
               // Keeps focus (and the selection range) on the textarea, so the
               // click handler reads where the caret actually was rather than
               // "end of text" after a blur.
@@ -896,11 +907,13 @@ export function SlideCanvas() {
             }}
             placeholder="amt"
             title='Any bend amount, e.g. "1/4" or "2" — Enter to insert'
+            aria-label="Bend amount"
             className="w-12 rounded border border-neutral-700 bg-neutral-950 px-1 py-0.5 text-[11px] text-neutral-200 placeholder:text-neutral-600"
           />
           <button
             type="button"
             title="Insert this amount at the cursor"
+            aria-label="Insert bend amount"
             disabled={customBend.trim() === ""}
             onClick={() => {
               const amount = customBend.trim();

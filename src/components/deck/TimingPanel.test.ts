@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { Slide } from "../../schema/deck.js";
-import { cueWarnings } from "./TimingPanel.js";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import { Slide, newDeck, parseCue } from "../../schema/deck.js";
+import { CUE_PLACEHOLDER, TimingPanel, cueWarnings } from "./TimingPanel.js";
+
+// The panel reads the store through selectors; a plain state object stands in, since server rendering never sees Zustand's live state.
+const store = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+vi.mock("../../store/deckStore.js", () => ({ useDeckStore: (select: (s: Record<string, unknown>) => unknown) => select(store.state) }));
 
 const slides = (...times: Array<number | undefined>) =>
   times.map((startTime) => Slide.parse({ id: crypto.randomUUID(), ...(startTime === undefined ? {} : { startTime }) }));
@@ -38,5 +44,21 @@ describe("cueWarnings", () => {
     const { sameTimeAs, outOfOrder } = cueWarnings(slides(0, 30, 10));
     expect([...outOfOrder]).toEqual([2]);
     expect(sameTimeAs.size).toBe(0);
+  });
+});
+
+describe("cue inputs", () => {
+  it("show an example that parseCue accepts", () => {
+    expect(parseCue(CUE_PLACEHOLDER)).toBe(80);
+  });
+  it("are each named for their slide", () => {
+    const deck = newDeck({ id: crypto.randomUUID(), title: "Song" });
+    deck.slides = ["Verse 1", "Chorus"].map((name) => Slide.parse({ id: crypto.randomUUID(), name, startTime: name === "Chorus" ? 20 : undefined }));
+    store.state = { deck, currentSlide: 0, stemMix: [] };
+    const html = renderToStaticMarkup(createElement(TimingPanel));
+    expect(html).toContain('aria-label="Cue time for Verse 1"');
+    expect(html).toContain('aria-label="Cue time for Chorus"');
+    expect(html).toContain('aria-label="Clear cue for Chorus"');
+    expect(html).toContain(`placeholder="${CUE_PLACEHOLDER}"`);
   });
 });
