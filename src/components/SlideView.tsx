@@ -19,7 +19,7 @@ export function SlideView() {
 
   if (!section) {
     return (
-      <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed border-neutral-800 text-sm text-neutral-600">
+      <div className="flex h-full min-h-64 items-center justify-center rounded-lg border border-dashed border-line text-sm text-faint">
         {song.sections.length === 0
           ? "Mark a section on the waveform to see its slide here."
           : "Playhead is between sections."}
@@ -37,23 +37,23 @@ export function SlideView() {
   const numeralsAreDerived = !section.romanNumerals;
 
   return (
-    <div className="flex h-full min-h-64 flex-col rounded-lg border border-neutral-800 bg-neutral-900/40 p-6">
+    <div className="flex h-full min-h-64 flex-col rounded-lg border border-line bg-panel p-6">
       <div className="mb-4 flex items-baseline justify-between">
-        <h2 className="text-2xl font-semibold text-neutral-50">{section.name}</h2>
-        <span className="text-sm text-neutral-500">
+        <h2 className="text-2xl font-semibold text-fg">{section.name}</h2>
+        <span className="text-sm text-faint">
           {key.tonic} {key.mode}
-          {key !== song.key && <span className="ml-1 text-amber-500">· section key</span>}
+          {key !== song.key && <span className="ml-1 text-warning">· section key</span>}
         </span>
       </div>
 
       {section.progression.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2 text-sm text-neutral-400">
+        <div className="mb-4 flex flex-wrap gap-2 text-sm text-muted">
           {section.progression.map((chord, i) => (
-            <span key={i} className="rounded bg-neutral-800 px-2 py-0.5">
+            <span key={i} className="rounded bg-raised px-2 py-0.5">
               {chord}
               {numerals[i] && (
                 <span
-                  className={`ml-1 ${numeralsAreDerived ? "italic text-neutral-600" : "text-neutral-500"}`}
+                  className={`ml-1 ${numeralsAreDerived ? "italic text-faint" : "text-faint"}`}
                   title={numeralsAreDerived ? "derived automatically — override in the section editor if wrong" : "hand-entered"}
                 >
                   {numerals[i]}
@@ -76,10 +76,10 @@ export function SlideView() {
             key={block.id}
             className={`whitespace-pre-wrap text-sm ${
               block.emphasis === "callout"
-                ? "rounded border border-emerald-900 bg-emerald-950/30 p-3 text-emerald-200"
+                ? "rounded border border-line bg-accent-soft p-3 text-fg"
                 : block.emphasis === "aside"
-                  ? "italic text-neutral-500"
-                  : "text-neutral-300"
+                  ? "italic text-faint"
+                  : "text-muted"
             }`}
           >
             {block.markdown}
@@ -88,7 +88,7 @@ export function SlideView() {
       )}
 
       {section.notes && (
-        <p className="mt-auto whitespace-pre-wrap pt-4 text-xs text-neutral-600">{section.notes}</p>
+        <p className="mt-auto whitespace-pre-wrap pt-4 text-xs text-faint">{section.notes}</p>
       )}
     </div>
   );

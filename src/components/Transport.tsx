@@ -27,23 +27,23 @@ export function Transport() {
   const title = useLibraryStore((s) => s.currentSong?.title ?? "");
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-2">
+    <div className="flex items-center gap-4 rounded-lg border border-line bg-panel px-4 py-2">
       <button
         onClick={() => transport?.playPause()}
         disabled={!transport}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-700 text-white disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-40"
         title={isPlaying ? "Pause" : "Play"}
       >
         {isPlaying ? "⏸" : "▶"}
       </button>
 
-      <span className="tabular-nums text-sm text-neutral-400">
+      <span className="tabular-nums text-sm text-muted">
         {formatTime(currentTime)} / {formatTime(duration)}
       </span>
 
       <label
         className={`flex items-center gap-1.5 text-sm ${
-          activeSectionId ? "text-neutral-300" : "text-neutral-600"
+          activeSectionId ? "text-muted" : "text-faint"
         }`}
         title={
           activeSectionId
@@ -61,12 +61,12 @@ export function Transport() {
       </label>
 
       <div className="ml-auto flex items-center gap-2">
-        {dirty && <span className="text-xs text-amber-500">Unsaved changes</span>}
-        <span className="truncate text-sm text-neutral-500">{title}</span>
+        {dirty && <span className="text-xs text-warning">Unsaved changes</span>}
+        <span className="truncate text-sm text-faint">{title}</span>
         <button
           onClick={() => void saveSong()}
           disabled={!dirty || saving}
-          className="rounded bg-neutral-800 px-3 py-1 text-sm text-neutral-200 disabled:opacity-40"
+          className="rounded bg-raised px-3 py-1 text-sm text-fg disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save"}
         </button>

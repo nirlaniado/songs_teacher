@@ -17,7 +17,7 @@ import { useDeckAssets } from "./useDeckAssets.js";
  * across a deck without re-uploading the same file.
  */
 
-const label = "block text-[11px] text-neutral-500";
+const label = "block text-[11px] text-faint";
 
 /** Every image asset the deck references, for the "reuse a saved image" grid. */
 export function savedImagePaths(deck: Deck): string[] {
@@ -79,7 +79,7 @@ export function BackgroundEditor({
         <button
           onClick={() => onChange({ kind: "color", color: fallbackColor })}
           className={`flex-1 rounded px-2 py-1 text-[11px] ${
-            !isImage ? "bg-sky-700 text-white" : "bg-neutral-800 text-neutral-300"
+            !isImage ? "bg-accent text-accent-fg" : "bg-raised text-muted"
           }`}
         >
           Color
@@ -92,7 +92,7 @@ export function BackgroundEditor({
             else if (!isImage) onChange({ kind: "image", src: saved[0]!, fit: "cover", dim: 0 });
           }}
           className={`flex-1 rounded px-2 py-1 text-[11px] ${
-            isImage ? "bg-sky-700 text-white" : "bg-neutral-800 text-neutral-300"
+            isImage ? "bg-accent text-accent-fg" : "bg-raised text-muted"
           }`}
         >
           Image
@@ -104,7 +104,7 @@ export function BackgroundEditor({
           type="color"
           value={value.color}
           onChange={(e) => onChange({ kind: "color", color: e.target.value })}
-          className="h-8 w-full rounded border border-neutral-700 bg-neutral-950"
+          className="h-8 w-full rounded border border-line bg-canvas"
         />
       )}
 
@@ -120,8 +120,8 @@ export function BackgroundEditor({
                     title={src}
                     aria-label={`Saved image ${src.split("/").pop()}`}
                     onClick={() => onChange({ ...value, src })}
-                    className={`aspect-video overflow-hidden rounded border-2 bg-neutral-950 ${
-                      value.src === src ? "border-sky-500" : "border-neutral-700 hover:border-neutral-500"
+                    className={`aspect-video overflow-hidden rounded border-2 bg-canvas ${
+                      value.src === src ? "border-accent" : "border-line hover:border-faint"
                     }`}
                   >
                     {thumbs[src] ? (
@@ -140,7 +140,7 @@ export function BackgroundEditor({
             <select
               value={value.fit}
               onChange={(e) => onChange({ ...value, fit: e.target.value as ImageBackground["fit"] })}
-              className="mt-0.5 w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200"
+              className="mt-0.5 w-full rounded border border-line bg-canvas px-2 py-1 text-xs text-fg"
             >
               <option value="cover">Cover — fill, cropping overflow</option>
               <option value="contain">Contain — fit whole image</option>
@@ -160,7 +160,7 @@ export function BackgroundEditor({
               onChange={(e) => onChange({ ...value, dim: Number(e.target.value) })}
               className="mt-0.5 w-full"
             />
-            <span className="text-[10px] text-neutral-600">Darkens the image so text stays readable.</span>
+            <span className="text-[10px] text-faint">Darkens the image so text stays readable.</span>
           </label>
         </>
       )}
@@ -169,14 +169,14 @@ export function BackgroundEditor({
         <button
           onClick={() => fileInput.current?.click()}
           disabled={busy}
-          className="flex-1 rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+          className="flex-1 rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover disabled:opacity-40"
         >
           {busy ? "Saving…" : "Upload image…"}
         </button>
         {onInherit && (
           <button
             onClick={onInherit}
-            className="flex-1 rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700"
+            className="flex-1 rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover"
           >
             {inheritLabel ?? "Use theme"}
           </button>

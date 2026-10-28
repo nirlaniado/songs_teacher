@@ -47,7 +47,7 @@ export default function App() {
   if (!supported) {
     return (
       <Centered>
-        <p className="max-w-sm text-center text-sm text-neutral-400">
+        <p className="max-w-sm text-center text-sm text-muted">
           This browser has neither the File System Access API nor IndexedDB, so there's
           nowhere for songs-teacher to keep your presentations. Try a different browser.
         </p>
@@ -59,18 +59,18 @@ export default function App() {
     return (
       <Centered>
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
-          <h1 className="text-2xl font-semibold text-neutral-100">songs-teacher</h1>
-          <p className="text-sm text-neutral-400">
+          <h1 className="text-2xl font-semibold text-fg">songs-teacher</h1>
+          <p className="text-sm text-muted">
             Presentations that follow the music — build slides, attach a song, and cue each
             slide to a moment in the track.
           </p>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-faint">
             {usingFallbackStorage
               ? "This browser can't open a real folder, so your work is stored inside the browser instead."
               : "Choose a folder to keep your presentations in."}
           </p>
           {usingFallbackStorage && (
-            <p className="text-xs text-neutral-600">
+            <p className="text-xs text-faint">
               That means no folder to back up or open directly, and clearing site data wipes
               it. Chrome, Edge, or Brave keep everything as real files on disk.
             </p>
@@ -78,12 +78,12 @@ export default function App() {
           <button
             onClick={() => void attach()}
             disabled={attaching}
-            className="rounded bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-fg disabled:opacity-50"
           >
             {attaching ? "Opening…" : usingFallbackStorage ? "Get started" : "Open folder"}
           </button>
-          {error && <p className="max-w-sm text-center text-xs text-red-400">{error}</p>}
-          <button onClick={() => setScreen("ug")} className="mt-3 text-sm text-emerald-400 hover:text-emerald-300">סוכן אקורדים · Ultimate Guitar</button>
+          {error && <p className="max-w-sm text-center text-xs text-danger">{error}</p>}
+          <button onClick={() => setScreen("ug")} className="mt-3 text-sm text-accent-light hover:text-fg">סוכן אקורדים · Ultimate Guitar</button>
         </div>
       </Centered>
     );
@@ -99,7 +99,7 @@ export default function App() {
         <Suspense
           fallback={
             <Centered>
-              <p className="text-sm text-neutral-500">Loading graph…</p>
+              <p className="text-sm text-faint">Loading graph…</p>
             </Centered>
           }
         >
@@ -109,10 +109,10 @@ export default function App() {
     }
     return (
       <div>
-        <div className="border-b border-neutral-800 px-6 py-2">
+        <div className="border-b border-line px-6 py-2">
           <button
             onClick={() => setScreen("decks")}
-            className="text-xs text-neutral-500 hover:text-neutral-300"
+            className="text-xs text-faint hover:text-muted"
           >
             ← Presentations
           </button>
@@ -126,10 +126,10 @@ export default function App() {
     <div>
       <DeckLibraryScreen onOpen={() => setScreen("editor")} />
       <div className="mx-auto flex max-w-3xl gap-6 px-10 pb-10">
-        <button onClick={() => setScreen("ug")} className="text-xs text-emerald-400 hover:text-emerald-300">סוכן אקורדים · Ultimate Guitar</button>
+        <button onClick={() => setScreen("ug")} className="text-xs text-accent-light hover:text-fg">סוכן אקורדים · Ultimate Guitar</button>
         <button
           onClick={() => setScreen("songs")}
-          className="text-xs text-neutral-600 hover:text-neutral-400"
+          className="text-xs text-faint hover:text-muted"
         >
           Song study tools →
         </button>

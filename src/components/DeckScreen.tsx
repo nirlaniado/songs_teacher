@@ -127,19 +127,19 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
 
   const chip = (on: boolean) =>
     `rounded px-2 py-0.5 text-xs ${
-      on ? "bg-neutral-800 text-neutral-200" : "text-neutral-500 hover:text-neutral-300"
+      on ? "bg-raised text-fg" : "text-faint hover:text-muted"
     }`;
 
   return (
-    <div ref={rootRef} className="flex h-screen flex-col bg-neutral-950">
+    <div ref={rootRef} className="flex h-screen flex-col bg-canvas">
       {/* App chrome. Hidden in focus mode — its whole job is getting out of
           the way of the canvas. */}
       {!focus && (
-        <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-3 py-1">
-          <button onClick={handleBack} className="text-xs text-neutral-500 hover:text-neutral-300">
+        <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-1">
+          <button onClick={handleBack} className="text-xs text-faint hover:text-muted">
             ← Presentations
           </button>
-          <span className="ml-auto text-[11px] text-neutral-600">
+          <span className="ml-auto text-[11px] text-faint">
             Double-click text to edit · Del removes · arrows nudge
           </span>
           <button onClick={() => setShowTiming((v) => !v)} className={chip(showTiming)}>
@@ -160,8 +160,8 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       {/* Focus mode's own strip: what to hide, and the way out. Kept thin so
           the canvas gets the space that pulling the chrome freed up. */}
       {focus && (
-        <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/70 px-3 py-0.5">
-          <span className="text-[11px] text-neutral-500">Focus — editing full screen</span>
+        <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-0.5">
+          <span className="text-[11px] text-faint">Focus — editing full screen</span>
           <div className="ml-auto flex items-center gap-1">
             <button onClick={() => setShowRail((v) => !v)} className={chip(showRail)}>
               Slides
@@ -175,7 +175,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             <button
               onClick={leaveFocus}
               title="Leave focus mode (Ctrl+Shift+F, or Esc while full screen)"
-              className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-700"
+              className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
             >
               ⤡ Exit focus
             </button>
@@ -184,7 +184,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
       )}
 
       {error && (
-        <p className="border-b border-red-900 bg-red-950/60 px-3 py-1 text-xs text-red-300">{error}</p>
+        <p className="border-b border-danger-soft bg-danger-soft px-3 py-1 text-xs text-danger">{error}</p>
       )}
 
       <div className="flex min-h-0 flex-1">

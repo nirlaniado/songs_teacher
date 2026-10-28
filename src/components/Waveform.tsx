@@ -5,6 +5,7 @@ import TimelinePlugin from "wavesurfer.js/plugins/timeline";
 import { useLibraryStore } from "../store/libraryStore.js";
 import { usePlayerStore } from "../store/playerStore.js";
 import { SECTION_TYPE_COLOR as TYPE_COLOR } from "./sectionColors.js";
+import { cssColor } from "./cssColor.js";
 
 /**
  * WaveSurfer + Regions, driving section creation, editing, and the playback
@@ -51,9 +52,9 @@ export function Waveform({ audioUrl }: { audioUrl: string }) {
       container: containerRef.current,
       url: audioUrl,
       height: 96,
-      waveColor: "#525252",
-      progressColor: "#059669",
-      cursorColor: "#f59e0b",
+      waveColor: cssColor("faint"),
+      progressColor: cssColor("accent"),
+      cursorColor: cssColor("fg"),
       normalize: true,
       dragToSeek: true,
       plugins: [regions, TimelinePlugin.create({ height: 16 })],
@@ -63,7 +64,7 @@ export function Waveform({ audioUrl }: { audioUrl: string }) {
     knownIdsRef.current = new Set();
 
     const disableDrag = regions.enableDragSelection({
-      color: "rgba(16, 185, 129, 0.25)",
+      color: cssColor("accent-soft"),
     });
 
     function stopClock() {
@@ -183,9 +184,9 @@ export function Waveform({ audioUrl }: { audioUrl: string }) {
   }, [sections]);
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
+    <div className="rounded-lg border border-line bg-panel p-3">
       <div ref={containerRef} />
-      <p className="mt-2 text-xs text-neutral-600">
+      <p className="mt-2 text-xs text-faint">
         Drag on empty waveform to mark a section. Drag a region's edges to resize, click to
         jump to it, double-click to delete.
       </p>

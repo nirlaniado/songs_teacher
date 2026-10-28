@@ -19,18 +19,18 @@ export function StemMixer() {
   const silent = isSilent(stemMix);
 
   return (
-    <div className="border-t border-neutral-800 px-3 py-2">
+    <div className="border-t border-line px-3 py-2">
       <div className="mb-1.5 flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
           Stems
         </span>
         {silent && (
-          <span className="text-[10px] text-amber-500">everything is muted — no sound</span>
+          <span className="text-[10px] text-warning">everything is muted — no sound</span>
         )}
         {soloing && (
           <button
             onClick={() => setStemMix(clearSolos(stemMix))}
-            className="text-[10px] text-sky-400 hover:text-sky-300"
+            className="text-[10px] text-accent-light hover:text-fg"
           >
             clear solo
           </button>
@@ -39,7 +39,7 @@ export function StemMixer() {
           onClick={() => {
             if (confirm("Remove the separated stems? The full mix is kept.")) void removeStems();
           }}
-          className="ml-auto text-[10px] text-neutral-600 hover:text-red-400"
+          className="ml-auto text-[10px] text-faint hover:text-danger"
         >
           Remove stems
         </button>
@@ -53,7 +53,7 @@ export function StemMixer() {
           return (
             <div key={stem.id} className="flex items-center gap-2">
               <span
-                className={`w-14 text-[11px] ${audible ? "text-neutral-200" : "text-neutral-600"}`}
+                className={`w-14 text-[11px] ${audible ? "text-fg" : "text-faint"}`}
               >
                 {STEM_LABEL[stem.id]}
               </span>
@@ -63,7 +63,7 @@ export function StemMixer() {
                 title="Mute"
                 aria-label={`Mute ${STEM_LABEL[stem.id]}`}
                 className={`w-6 rounded px-1 py-0.5 text-[10px] font-medium ${
-                  stem.muted ? "bg-red-800 text-white" : "bg-neutral-800 text-neutral-400"
+                  stem.muted ? "bg-danger text-canvas" : "bg-raised text-muted"
                 }`}
               >
                 M
@@ -73,7 +73,7 @@ export function StemMixer() {
                 title="Solo"
                 aria-label={`Solo ${STEM_LABEL[stem.id]}`}
                 className={`w-6 rounded px-1 py-0.5 text-[10px] font-medium ${
-                  stem.soloed ? "bg-amber-600 text-white" : "bg-neutral-800 text-neutral-400"
+                  stem.soloed ? "bg-warning text-canvas" : "bg-raised text-muted"
                 }`}
               >
                 S
@@ -87,7 +87,7 @@ export function StemMixer() {
                 value={stem.gain}
                 onChange={(e) => setStemMix(setStemGain(stemMix, stem.id, Number(e.target.value)))}
                 aria-label={`${STEM_LABEL[stem.id]} volume`}
-                className="h-1 flex-1 accent-sky-500"
+                className="h-1 flex-1 accent-accent"
               />
             </div>
           );

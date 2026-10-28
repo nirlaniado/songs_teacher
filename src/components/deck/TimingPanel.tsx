@@ -97,9 +97,9 @@ export function TimingPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col border-t border-neutral-800 bg-neutral-900">
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+    <div className="flex h-full flex-col border-t border-line bg-panel">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
           Music sync
         </span>
 
@@ -109,21 +109,21 @@ export function TimingPanel() {
               onClick={player.toggle}
               disabled={!player.available}
               aria-label={playing ? "Pause" : "Play"}
-              className="rounded bg-emerald-700 px-2 py-0.5 text-xs text-white disabled:opacity-40"
+              className="rounded bg-accent px-2 py-0.5 text-xs text-accent-fg disabled:opacity-40"
             >
               {playing ? "⏸" : "▶"}
             </button>
-            <span className="tabular-nums text-xs text-neutral-400">
+            <span className="tabular-nums text-xs text-muted">
               {formatCue(time)} / {duration ? formatCue(duration) : "—"}
             </span>
-            <span className="truncate text-[11px] text-neutral-600">
+            <span className="truncate text-[11px] text-faint">
               {deck.audio.originalName ?? deck.audio.path}
             </span>
             <button
               onClick={() => {
                 if (confirm("Remove the audio track? Cue times are kept.")) void removeAudio();
               }}
-              className="ml-auto text-[11px] text-neutral-500 hover:text-red-400"
+              className="ml-auto text-[11px] text-faint hover:text-danger"
             >
               Remove audio
             </button>
@@ -132,11 +132,11 @@ export function TimingPanel() {
           <>
             <button
               onClick={() => fileInput.current?.click()}
-              className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-700"
+              className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
             >
               Add MP3
             </button>
-            <span className="text-[11px] text-neutral-600">
+            <span className="text-[11px] text-faint">
               Attach a track, then cue each slide to a moment in the song.
             </span>
           </>
@@ -157,7 +157,7 @@ export function TimingPanel() {
       {/* Timeline strip: cue marks over the song, click to scrub. */}
       {deck.audio && (
         <div
-          className="relative mx-3 mt-2 h-6 cursor-pointer rounded bg-neutral-800"
+          className="relative mx-3 mt-2 h-6 cursor-pointer rounded bg-raised"
           onClick={(e) => {
             if (!duration) return;
             const rect = e.currentTarget.getBoundingClientRect();
@@ -168,14 +168,14 @@ export function TimingPanel() {
             cues.map((cue) => (
               <div
                 key={cue.index}
-                className="absolute top-0 h-full w-0.5 bg-emerald-400"
+                className="absolute top-0 h-full w-0.5 bg-accent"
                 style={{ left: `${(cue.time / duration) * 100}%` }}
                 title={`Slide ${cue.index + 1} @ ${formatCue(cue.time)}`}
               />
             ))}
           {duration > 0 && (
             <div
-              className="pointer-events-none absolute top-0 h-full w-0.5 bg-amber-400"
+              className="pointer-events-none absolute top-0 h-full w-0.5 bg-fg"
               style={{ left: `${Math.min(100, (time / duration) * 100)}%` }}
             />
           )}
@@ -185,7 +185,7 @@ export function TimingPanel() {
       <div className="mt-2 flex-1 overflow-y-auto px-3 pb-3">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wide text-neutral-600">
+            <tr className="text-left text-[10px] uppercase tracking-wide text-faint">
               <th className="w-8 pb-1">#</th>
               <th className="pb-1">Slide</th>
               <th className="w-24 pb-1">Cue</th>
@@ -200,26 +200,26 @@ export function TimingPanel() {
               return (
                 <tr
                   key={slide.id}
-                  className={`border-t border-neutral-800/70 ${
-                    isLive ? "bg-emerald-950/40" : i === currentSlide ? "bg-neutral-800/40" : ""
+                  className={`border-t border-line ${
+                    isLive ? "bg-accent-soft" : i === currentSlide ? "bg-raised" : ""
                   }`}
                 >
-                  <td className="py-1 text-neutral-500">{i + 1}</td>
+                  <td className="py-1 text-faint">{i + 1}</td>
                   <td className="py-1">
                     <button
                       onClick={() => selectSlide(i)}
-                      className="truncate text-left text-neutral-200 hover:text-sky-400"
+                      className="truncate text-left text-fg hover:text-accent-light"
                     >
                       {slide.name}
                     </button>
                     {outOfOrder.has(i) && (
-                      <span className="ml-1 text-[10px] text-amber-500" title="Cue runs backwards">
+                      <span className="ml-1 text-[10px] text-warning" title="Cue runs backwards">
                         ⚠ out of order
                       </span>
                     )}
                     {shared !== undefined && (
                       <span
-                        className="ml-1 text-[10px] text-amber-500"
+                        className="ml-1 text-[10px] text-warning"
                         title="Two slides on one instant: the music can only show one of them"
                       >
                         ⚠ same time as slide {shared + 1}
@@ -236,8 +236,8 @@ export function TimingPanel() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       }}
-                      className={`w-20 rounded border bg-neutral-950 px-1.5 py-0.5 tabular-nums placeholder:text-neutral-600 ${
-                        bad ? "border-amber-600 text-amber-300" : "border-neutral-700 text-neutral-200"
+                      className={`w-20 rounded border bg-canvas px-1.5 py-0.5 tabular-nums placeholder:text-faint ${
+                        bad ? "border-warning text-warning" : "border-line text-fg"
                       }`}
                     />
                   </td>
@@ -246,7 +246,7 @@ export function TimingPanel() {
                       onClick={() => setSlideCue(i, Math.round(time * 10) / 10)}
                       disabled={!deck.audio}
                       title="Cue this slide at the current playhead"
-                      className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-neutral-700 disabled:opacity-30"
+                      className="rounded bg-raised px-1.5 py-0.5 text-[10px] text-muted hover:bg-raised-hover disabled:opacity-30"
                     >
                       Set {deck.audio ? formatCue(time) : ""}
                     </button>
@@ -255,7 +255,7 @@ export function TimingPanel() {
                         onClick={() => setSlideCue(i, undefined)}
                         title="Clear cue"
                         aria-label={`Clear cue for ${slide.name}`}
-                        className="ml-1 text-[10px] text-neutral-600 hover:text-red-400"
+                        className="ml-1 text-[10px] text-faint hover:text-danger"
                       >
                         ✕
                       </button>
@@ -268,7 +268,7 @@ export function TimingPanel() {
         </table>
 
         {deck.slides.length > 0 && cues.length === 0 && (
-          <p className="mt-3 text-[11px] text-neutral-600">
+          <p className="mt-3 text-[11px] text-faint">
             No cues yet. Play the track, and press <em>Set</em> on a slide when the song reaches
             the moment that slide should appear.
           </p>

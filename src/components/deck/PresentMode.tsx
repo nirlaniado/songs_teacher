@@ -184,7 +184,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stage"
       tabIndex={-1}
     >
       <SlideRenderer slide={slide} theme={deck.theme} scale={scale} assetUrls={assetUrls} />
@@ -195,11 +195,11 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
             void player.play();
             setNeedsGesture(false);
           }}
-          className="absolute inset-0 flex items-center justify-center bg-black/70 text-neutral-100"
+          className="absolute inset-0 flex items-center justify-center bg-stage/70 text-fg"
         >
-          <span className="rounded-lg border border-neutral-600 bg-neutral-900 px-6 py-4 text-center">
+          <span className="rounded-lg border border-faint bg-panel px-6 py-4 text-center">
             <span className="block text-lg">▶ Click to start</span>
-            <span className="mt-1 block text-xs text-neutral-400">
+            <span className="mt-1 block text-xs text-muted">
               Your browser blocked playback from starting on its own.
             </span>
           </span>
@@ -207,7 +207,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
       )}
 
       {chrome && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/85 to-transparent px-5 pb-4 pt-10 text-sm text-neutral-200">
+        <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-stage/85 to-transparent px-5 pb-4 pt-10 text-sm text-fg">
           <button onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous slide" className="disabled:opacity-30">
             ←
           </button>
@@ -225,21 +225,21 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
 
           {deck.audio && (
             <>
-              <span className="mx-1 h-4 w-px bg-white/20" />
+              <span className="mx-1 h-4 w-px bg-fg/20" />
               <button
                 onClick={player.toggle}
                 aria-label={playing ? "Pause" : "Play"}
-                className="rounded bg-emerald-700 px-2 py-0.5 text-xs text-white"
+                className="rounded bg-accent px-2 py-0.5 text-xs text-accent-fg"
               >
                 {playing ? "⏸" : "▶"}
               </button>
-              <span className="tabular-nums text-xs text-neutral-400">
+              <span className="tabular-nums text-xs text-muted">
                 {formatCue(time)}
                 {duration ? ` / ${formatCue(duration)}` : ""}
               </span>
 
               <div
-                className="relative h-1.5 flex-1 cursor-pointer rounded bg-white/20"
+                className="relative h-1.5 flex-1 cursor-pointer rounded bg-fg/20"
                 onClick={(e) => {
                   if (!duration) return;
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -253,13 +253,13 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
                   cues.map((c) => (
                     <div
                       key={c.index}
-                      className="absolute top-0 h-full w-0.5 bg-emerald-400"
+                      className="absolute top-0 h-full w-0.5 bg-accent"
                       style={{ left: `${(c.time / duration) * 100}%` }}
                     />
                   ))}
                 {duration > 0 && (
                   <div
-                    className="absolute top-0 h-full bg-amber-400/80"
+                    className="absolute top-0 h-full bg-fg/30"
                     style={{ width: `${Math.min(100, (time / duration) * 100)}%` }}
                   />
                 )}
@@ -269,7 +269,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
                 onClick={() => setManual(false)}
                 title="Resume following the music"
                 className={`rounded px-2 py-0.5 text-xs ${
-                  manual ? "bg-amber-600 text-white" : "bg-white/10 text-neutral-400"
+                  manual ? "bg-warning text-canvas" : "bg-fg/10 text-muted"
                 }`}
               >
                 {manual ? "Manual — click to follow" : "Following music"}
@@ -277,7 +277,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
             </>
           )}
 
-          <button onClick={onExit} className="ml-auto text-xs text-neutral-400 hover:text-white">
+          <button onClick={onExit} className="ml-auto text-xs text-muted hover:text-fg">
             Exit (Esc)
           </button>
         </div>

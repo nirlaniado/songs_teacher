@@ -5,6 +5,7 @@ import { useGraphStore } from "../store/graphStore.js";
 import { useLibraryStore } from "../store/libraryStore.js";
 import { topKPerNode, type GraphEdge, type GraphNode } from "../graph/index.js";
 import { EDGE_TYPE_RANK } from "../graph/types.js";
+import { cssColor } from "./cssColor.js";
 
 cytoscape.use(fcose);
 
@@ -74,21 +75,21 @@ export function GraphView({ onBack }: { onBack: () => void }) {
         {
           selector: "node",
           style: {
-            "background-color": "#059669",
+            "background-color": cssColor("accent"),
             label: "data(label)",
-            color: "#e5e5e5",
+            color: cssColor("fg"),
             "font-size": 9,
             "text-valign": "bottom",
             "text-margin-y": 4,
             width: 14,
             height: 14,
             "border-width": 1,
-            "border-color": "#0a0a0a",
+            "border-color": cssColor("canvas"),
           },
         },
         {
           selector: "node:selected",
-          style: { "background-color": "#f59e0b", "border-color": "#f59e0b" },
+          style: { "background-color": cssColor("fg"), "border-color": cssColor("fg") },
         },
         ...(Object.entries(EDGE_STYLE) as [GraphEdge["type"], (typeof EDGE_STYLE)[GraphEdge["type"]]][]).map(
           ([type, s]) => ({
@@ -152,15 +153,15 @@ export function GraphView({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
-        <button onClick={onBack} className="text-sm text-neutral-500 hover:text-neutral-300">
+      <div className="flex items-center justify-between border-b border-line px-6 py-3">
+        <button onClick={onBack} className="text-sm text-faint hover:text-muted">
           ← Library
         </button>
-        <h1 className="text-lg font-semibold text-neutral-100">Harmonic graph</h1>
+        <h1 className="text-lg font-semibold text-fg">Harmonic graph</h1>
         <button
           onClick={() => void build()}
           disabled={loading}
-          className="rounded bg-neutral-800 px-3 py-1 text-sm text-neutral-200 disabled:opacity-40"
+          className="rounded bg-raised px-3 py-1 text-sm text-fg disabled:opacity-40"
         >
           {loading ? "Building…" : "Rebuild"}
         </button>
@@ -168,18 +169,18 @@ export function GraphView({ onBack }: { onBack: () => void }) {
 
       <div className="relative flex-1">
         {error && (
-          <p className="absolute left-4 top-4 z-10 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-300">
+          <p className="absolute left-4 top-4 z-10 rounded border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
             {error}
           </p>
         )}
         {index && index.nodes.length === 0 && !loading && (
-          <div className="flex h-full items-center justify-center text-sm text-neutral-600">
+          <div className="flex h-full items-center justify-center text-sm text-faint">
             No sections with a progression yet — add chords to a section to see it here.
           </div>
         )}
         <div ref={containerRef} className="h-full w-full" />
 
-        <div className="absolute bottom-4 left-4 flex flex-col gap-1 rounded-md border border-neutral-800 bg-neutral-950/90 p-2 text-xs text-neutral-400">
+        <div className="absolute bottom-4 left-4 flex flex-col gap-1 rounded-md border border-line bg-canvas p-2 text-xs text-muted">
           {(Object.entries(EDGE_STYLE) as [GraphEdge["type"], (typeof EDGE_STYLE)[GraphEdge["type"]]][]).map(
             ([type, s]) => (
               <div key={type} className="flex items-center gap-2">
@@ -194,33 +195,33 @@ export function GraphView({ onBack }: { onBack: () => void }) {
         </div>
 
         {selection && (
-          <div className="absolute right-4 top-4 w-80 max-h-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950/95 p-4 text-sm">
+          <div className="absolute right-4 top-4 w-80 max-h-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-line bg-canvas p-4 text-sm">
             {selection.kind === "node" ? (
               <>
-                <h2 className="font-semibold text-neutral-100">{selection.node.sectionName}</h2>
-                <p className="text-xs text-neutral-500">{selection.node.songTitle}</p>
-                <p className="mt-2 text-xs text-neutral-400">{selection.node.romanNumerals.join(" – ")}</p>
+                <h2 className="font-semibold text-fg">{selection.node.sectionName}</h2>
+                <p className="text-xs text-faint">{selection.node.songTitle}</p>
+                <p className="mt-2 text-xs text-muted">{selection.node.romanNumerals.join(" – ")}</p>
                 <button
                   onClick={() => void openSong(selection.node.songId)}
-                  className="mt-3 rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white"
+                  className="mt-3 rounded bg-accent px-2 py-1 text-xs font-medium text-accent-fg"
                 >
                   Open song
                 </button>
-                <h3 className="mb-1 mt-4 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                <h3 className="mb-1 mt-4 text-xs font-medium uppercase tracking-wide text-faint">
                   Connections ({selection.edges.length})
                 </h3>
                 <ul className="space-y-2">
                   {selection.edges.map((e, i) => {
                     const other = nodesById.get(e.a === selection.node.id ? e.b : e.a);
                     return (
-                      <li key={i} className="border-t border-neutral-800 pt-2">
+                      <li key={i} className="border-t border-line pt-2">
                         <div className="flex items-center justify-between">
                           <span style={{ color: EDGE_STYLE[e.type].color }} className="text-xs font-medium">
                             {EDGE_STYLE[e.type].label}
                           </span>
-                          <span className="text-xs text-neutral-500">{other?.songTitle}</span>
+                          <span className="text-xs text-faint">{other?.songTitle}</span>
                         </div>
-                        <p className="mt-1 text-xs text-neutral-400">{e.detail}</p>
+                        <p className="mt-1 text-xs text-muted">{e.detail}</p>
                       </li>
                     );
                   })}
@@ -231,15 +232,15 @@ export function GraphView({ onBack }: { onBack: () => void }) {
                 <h2 className="font-semibold" style={{ color: EDGE_STYLE[selection.edge.type].color }}>
                   {EDGE_STYLE[selection.edge.type].label}
                 </h2>
-                <p className="mt-2 text-xs text-neutral-400">{selection.edge.detail}</p>
+                <p className="mt-2 text-xs text-muted">{selection.edge.detail}</p>
                 <div className="mt-3 space-y-2">
                   {[selection.a, selection.b].map((n) => (
-                    <div key={n.id} className="rounded border border-neutral-800 p-2">
-                      <p className="text-xs font-medium text-neutral-200">{n.sectionName}</p>
-                      <p className="text-xs text-neutral-500">{n.songTitle}</p>
+                    <div key={n.id} className="rounded border border-line p-2">
+                      <p className="text-xs font-medium text-fg">{n.sectionName}</p>
+                      <p className="text-xs text-faint">{n.songTitle}</p>
                       <button
                         onClick={() => void openSong(n.songId)}
-                        className="mt-1 text-xs text-emerald-500 hover:text-emerald-400"
+                        className="mt-1 text-xs text-accent-light hover:text-fg"
                       >
                         Open →
                       </button>
