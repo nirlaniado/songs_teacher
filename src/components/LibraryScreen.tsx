@@ -58,7 +58,7 @@ export function LibraryScreen({ onViewGraph }: { onViewGraph: () => void }) {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-fg">Library</h1>
         <div className="flex items-center gap-4">
-          <button onClick={onViewGraph} className="text-sm text-accent-light hover:text-accent-light">
+          <button onClick={onViewGraph} className="text-sm text-accent-light hover:text-fg">
             Harmonic graph →
           </button>
           <button

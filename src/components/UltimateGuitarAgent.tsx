@@ -156,7 +156,7 @@ export function UltimateGuitarAgent({ onBack, onDeckCreated }: { onBack: () => v
           <button className={button} onClick={() => download(result)}>הורד JSON</button>
           <button className="rounded bg-raised px-4 py-2 text-sm" onClick={() => { void navigator.clipboard.writeText(result.chart).then(() => setCopied(true)).catch(() => setError("לא ניתן להעתיק. אפשר להוריד JSON.")); }}>{copied ? "הועתק" : "העתק אקורדים"}</button>
           {/* English by request, unlike the rest of this screen. */}
-          <label dir="ltr" className="cursor-pointer rounded border border-faint px-3 py-2 text-sm text-fg hover:border-faint">
+          <label dir="ltr" className="cursor-pointer rounded border border-faint px-3 py-2 text-sm text-fg hover:border-muted">
             {mp3 ? `MP3: ${mp3.name}` : "Choose MP3 (required)"}
             <input type="file" accept="audio/*" className="hidden" onChange={(e) => setMp3(e.target.files?.[0] ?? null)} />
           </label>

@@ -83,7 +83,7 @@ export default function App() {
             {attaching ? "Opening…" : usingFallbackStorage ? "Get started" : "Open folder"}
           </button>
           {error && <p className="max-w-sm text-center text-xs text-danger">{error}</p>}
-          <button onClick={() => setScreen("ug")} className="mt-3 text-sm text-accent-light hover:text-accent-light">סוכן אקורדים · Ultimate Guitar</button>
+          <button onClick={() => setScreen("ug")} className="mt-3 text-sm text-accent-light hover:text-fg">סוכן אקורדים · Ultimate Guitar</button>
         </div>
       </Centered>
     );
@@ -126,7 +126,7 @@ export default function App() {
     <div>
       <DeckLibraryScreen onOpen={() => setScreen("editor")} />
       <div className="mx-auto flex max-w-3xl gap-6 px-10 pb-10">
-        <button onClick={() => setScreen("ug")} className="text-xs text-accent-light hover:text-accent-light">סוכן אקורדים · Ultimate Guitar</button>
+        <button onClick={() => setScreen("ug")} className="text-xs text-accent-light hover:text-fg">סוכן אקורדים · Ultimate Guitar</button>
         <button
           onClick={() => setScreen("songs")}
           className="text-xs text-faint hover:text-muted"

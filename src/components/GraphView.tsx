@@ -240,7 +240,7 @@ export function GraphView({ onBack }: { onBack: () => void }) {
                       <p className="text-xs text-faint">{n.songTitle}</p>
                       <button
                         onClick={() => void openSong(n.songId)}
-                        className="mt-1 text-xs text-accent-light hover:text-accent-light"
+                        className="mt-1 text-xs text-accent-light hover:text-fg"
                       >
                         Open →
                       </button>
