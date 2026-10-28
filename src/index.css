@@ -1,7 +1,76 @@
 @import "tailwindcss";
 
-@theme {
+/*
+ * Colour lives here and nowhere else: components use only the semantic names below, so a palette change is an edit
+ * to this file. None of it reaches slide content — SlideRenderer paints a deck's own Background and text colours,
+ * which are document data, not chrome.
+ */
+
+/* Layer 1 — the "Studio" values. Owner-chosen unless marked; tune these after screenshots. */
+:root {
+  --studio-ink: #0f172a;
+  --studio-slate: #192134;
+  /* Not in the owner's table: the raised steps for controls, picked one and two notches above the panel. */
+  --studio-slate-raised: #243049;
+  --studio-slate-raised-hover: #2f3c58;
+  --studio-hairline: rgba(255, 255, 255, 0.09);
+  --studio-white: #ffffff;
+  --studio-mist: #b6c0d4;
+  --studio-fog: #8a94a8;
+  --studio-blue: #2563eb;
+  /* Not in the owner's table: #2563eb as text on #0f172a is ~3:1, under AA, so blue *text* uses this lighter step. */
+  --studio-blue-light: #60a5fa;
+  /* State hues, kept apart from the blue so they never read as selection; text-weight on the dark surfaces. */
+  --studio-amber: #fbbf24;
+  --studio-green: #34d399;
+  --studio-red: #f87171;
+  --studio-pink: #f472b6;
+  /* The editor grid is drawn over the teacher's slide, which may be white: a mid-grey shows on light and dark alike. */
+  --studio-grid: rgb(148 163 184 / 0.12);
+  --studio-black: #000000;
+}
+
+/*
+ * Layer 2 — semantic names; the only colours that exist (the default palette is cleared).
+ *
+ * The old ten-step neutral ramp collapses to canvas/panel/raised for surfaces, one line, and fg/muted/faint for text:
+ * those steps were typed ad hoc, not chosen, so keeping ten would preserve noise rather than meaning.
+ * `sky` is retired: selection is the accent, so selecting something and the app's one accent are the same blue
+ * instead of two competing ones. Amber, emerald and red carry meaning, so they are named for it.
+ * `static` keeps every variable emitted even when no utility uses it, since SlideCanvas reads some from inline styles.
+ */
+@theme static {
   --font-sans: ui-sans-serif, system-ui, sans-serif;
+
+  --color-*: initial;
+
+  --color-canvas: var(--studio-ink);
+  --color-panel: var(--studio-slate);
+  --color-raised: var(--studio-slate-raised);
+  --color-raised-hover: var(--studio-slate-raised-hover);
+  --color-line: var(--studio-hairline);
+
+  --color-fg: var(--studio-white);
+  --color-muted: var(--studio-mist);
+  --color-faint: var(--studio-fog);
+
+  --color-accent: var(--studio-blue);
+  --color-accent-fg: var(--studio-white);
+  --color-accent-light: var(--studio-blue-light);
+  --color-accent-soft: rgb(37 99 235 / 0.22);
+
+  --color-warning: var(--studio-amber);
+  --color-warning-soft: rgb(251 191 36 / 0.14);
+  --color-success: var(--studio-green);
+  --color-success-soft: rgb(52 211 153 / 0.14);
+  --color-danger: var(--studio-red);
+  --color-danger-soft: rgb(248 113 113 / 0.14);
+
+  --color-grid: var(--studio-grid);
+  /* Snap guides: must stand apart from the accent-blue selection they appear next to. */
+  --color-guide: var(--studio-pink);
+  /* Present mode's letterbox and scrims sit on the projected slide, so they stay true black rather than tinted slate. */
+  --color-stage: var(--studio-black);
 }
 
 html,
@@ -11,5 +80,5 @@ body,
 }
 
 body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
+  @apply bg-canvas text-fg antialiased;
 }

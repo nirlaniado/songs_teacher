@@ -20,7 +20,7 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
   return (
     <li
       className={`rounded-md border p-2 ${
-        active ? "border-emerald-700 bg-emerald-950/30" : "border-neutral-800 bg-neutral-900/40"
+        active ? "border-accent bg-accent-soft" : "border-line bg-panel"
       }`}
     >
       <div className="flex items-center gap-2">
@@ -29,19 +29,19 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
             selectSection(section.id);
             transport?.seek(section.start);
           }}
-          className="flex-1 text-left text-sm font-medium text-neutral-100 hover:text-emerald-400"
+          className="flex-1 text-left text-sm font-medium text-fg hover:text-accent-light"
           title="Jump to this section"
         >
           {section.name}
         </button>
-        <span className="text-[11px] tabular-nums text-neutral-500">
+        <span className="text-[11px] tabular-nums text-faint">
           {formatTime(section.start)}–{formatTime(section.end)}
         </span>
         <button
           onClick={() => {
             if (confirm(`Delete "${section.name}"?`)) removeSection(section.id);
           }}
-          className="text-xs text-neutral-600 hover:text-red-400"
+          className="text-xs text-faint hover:text-danger"
         >
           ✕
         </button>
@@ -52,14 +52,14 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
           value={section.name}
           onChange={(e) => updateSection(section.id, (s) => ({ ...s, name: e.target.value }))}
           placeholder="Name"
-          className="w-32 rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
+          className="w-32 rounded border border-line bg-canvas px-2 py-1 text-xs"
         />
         <select
           value={section.type}
           onChange={(e) =>
             updateSection(section.id, (s) => ({ ...s, type: e.target.value as Section["type"] }))
           }
-          className="rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
+          className="rounded border border-line bg-canvas px-2 py-1 text-xs"
         >
           {TYPES.map((t) => (
             <option key={t} value={t}>
@@ -69,7 +69,7 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
         </select>
       </div>
 
-      <label className="mt-2 block text-[11px] text-neutral-500">
+      <label className="mt-2 block text-[11px] text-faint">
         Progression (chords, space-separated — the graph's only harmonic input)
         <input
           defaultValue={section.progression.join(" ")}
@@ -78,11 +78,11 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
             updateSection(section.id, (s) => ({ ...s, progression }));
           }}
           placeholder="C G Am F"
-          className="mt-1 block w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
+          className="mt-1 block w-full rounded border border-line bg-canvas px-2 py-1 text-xs"
         />
       </label>
 
-      <label className="mt-2 block text-[11px] text-neutral-500">
+      <label className="mt-2 block text-[11px] text-faint">
         Notes
         <textarea
           defaultValue={section.notes ?? ""}
@@ -94,7 +94,7 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
           }
           rows={2}
           placeholder="Observations, markdown…"
-          className="mt-1 block w-full resize-y rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs"
+          className="mt-1 block w-full resize-y rounded border border-line bg-canvas px-2 py-1 text-xs"
         />
       </label>
     </li>
@@ -107,11 +107,11 @@ export function SectionList() {
 
   return (
     <div className="flex h-full flex-col">
-      <h2 className="mb-2 text-sm font-medium text-neutral-300">
-        Sections <span className="text-neutral-600">({sections.length})</span>
+      <h2 className="mb-2 text-sm font-medium text-muted">
+        Sections <span className="text-faint">({sections.length})</span>
       </h2>
       {sections.length === 0 ? (
-        <p className="text-xs text-neutral-600">
+        <p className="text-xs text-faint">
           None yet — drag on the waveform above to mark the first one.
         </p>
       ) : (

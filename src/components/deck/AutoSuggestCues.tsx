@@ -79,40 +79,40 @@ export function AutoSuggestCues() {
   }
 
   return (
-    <div className="border-t border-neutral-800 px-3 py-2">
+    <div className="border-t border-line px-3 py-2">
       {!running ? (
         <div className="flex items-center gap-2">
           <button
             onClick={() => void run()}
-            className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-700"
+            className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
           >
             Auto-suggest cues
           </button>
-          <span className="text-[11px] text-neutral-600">
+          <span className="text-[11px] text-faint">
             Cues each slide from where the music changes (nothing is uploaded). Decks made
             from the chord agent are timed by their lyrics when they are created.
           </span>
         </div>
       ) : (
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-[11px] text-neutral-300">
+          <div className="flex items-center gap-2 text-[11px] text-muted">
             <span>{detail ?? "Analysing"}…</span>
             <button
               onClick={() => abortRef.current?.abort()}
-              className="ml-auto text-neutral-500 hover:text-red-400"
+              className="ml-auto text-faint hover:text-danger"
             >
               Cancel
             </button>
           </div>
-          <div className="h-1 overflow-hidden rounded bg-neutral-800">
-            <div className="h-full bg-sky-600 transition-[width]" style={{ width: `${Math.round(fraction * 100)}%` }} />
+          <div className="h-1 overflow-hidden rounded bg-raised">
+            <div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round(fraction * 100)}%` }} />
           </div>
         </div>
       )}
 
-      {message && <p className="mt-1 text-[11px] text-emerald-400">{message}</p>}
+      {message && <p className="mt-1 text-[11px] text-success">{message}</p>}
       {error && (
-        <p className="mt-1 rounded border border-red-900 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">{error}</p>
+        <p className="mt-1 rounded border border-danger-soft bg-danger-soft px-2 py-1 text-[11px] text-danger">{error}</p>
       )}
     </div>
   );

@@ -25,26 +25,26 @@ export function ChordChart({ block, effectiveKey }: { block: ChordChartBlock; ef
         return (
           <div
             key={i}
-            className="relative flex h-20 overflow-hidden rounded-md border border-neutral-700 bg-neutral-900"
+            className="relative flex h-20 overflow-hidden rounded-md border border-line bg-panel"
           >
             {bar.chords.map((chord, j) => (
               <div
                 key={j}
                 style={{ flexGrow: beats[j] ?? 1, flexBasis: 0 }}
                 className={`flex flex-col items-center justify-center gap-0.5 ${
-                  j > 0 ? "border-l border-neutral-700" : ""
+                  j > 0 ? "border-l border-line" : ""
                 }`}
               >
-                <span className="text-lg font-semibold text-neutral-100">{chord}</span>
+                <span className="text-lg font-semibold text-fg">{chord}</span>
                 {block.showRomanNumerals && (
-                  <span className="text-[10px] text-neutral-500">
+                  <span className="text-[10px] text-faint">
                     {romanNumeralFor(chord, effectiveKey) ?? ""}
                   </span>
                 )}
               </div>
             ))}
             {bar.label && (
-              <span className="absolute right-1 top-1 text-[10px] text-neutral-500">
+              <span className="absolute right-1 top-1 text-[10px] text-faint">
                 {bar.label}
               </span>
             )}

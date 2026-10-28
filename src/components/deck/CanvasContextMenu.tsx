@@ -113,11 +113,11 @@ export function CanvasContextMenu({ at, onClose }: { at: MenuPoint; onClose: () 
       onPointerDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: position.x, top: position.y }}
-      className="fixed z-50 min-w-52 rounded border border-neutral-700 bg-neutral-900 py-1 shadow-xl"
+      className="fixed z-50 min-w-52 rounded border border-line bg-panel py-1 shadow-xl"
     >
       {entries.map((entry, i) =>
         entry.separator ? (
-          <div key={`sep-${i}`} className="my-1 h-px bg-neutral-800" />
+          <div key={`sep-${i}`} className="my-1 h-px bg-raised" />
         ) : (
           <button
             key={entry.label}
@@ -126,10 +126,10 @@ export function CanvasContextMenu({ at, onClose }: { at: MenuPoint; onClose: () 
               entry.run?.();
               onClose();
             }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1 text-left text-[11px] text-neutral-200 hover:bg-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent"
+            className="flex w-full items-center justify-between gap-6 px-3 py-1 text-left text-[11px] text-fg hover:bg-raised disabled:text-faint disabled:hover:bg-transparent"
           >
             {entry.label}
-            {entry.shortcut && <span className="text-neutral-500">{entry.shortcut}</span>}
+            {entry.shortcut && <span className="text-faint">{entry.shortcut}</span>}
           </button>
         ),
       )}

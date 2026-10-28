@@ -32,19 +32,19 @@ export function SongScreen() {
   return (
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-6">
       <div className="flex items-center justify-between">
-        <button onClick={handleClose} className="text-sm text-neutral-500 hover:text-neutral-300">
+        <button onClick={handleClose} className="text-sm text-faint hover:text-muted">
           ← Library
         </button>
         <div className="text-right">
-          <h1 className="text-lg font-semibold text-neutral-100">{song.title}</h1>
-          {song.artist && <p className="text-xs text-neutral-500">{song.artist}</p>}
+          <h1 className="text-lg font-semibold text-fg">{song.title}</h1>
+          {song.artist && <p className="text-xs text-faint">{song.artist}</p>}
         </div>
       </div>
 
       {song.audio && audioHandle ? (
         <Waveform audioUrl={audioHandle.url} />
       ) : (
-        <div className="rounded-lg border border-dashed border-neutral-800 px-4 py-8 text-center text-sm text-neutral-500">
+        <div className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-faint">
           This song has no audio file. Its sections and analysis are intact — see the notes
           for where the audio used to come from.
         </div>

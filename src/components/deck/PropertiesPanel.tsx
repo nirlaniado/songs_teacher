@@ -10,13 +10,13 @@ import { BackgroundEditor } from "./BackgroundEditor.js";
  * properties, which Impress splits across several dialogs.
  */
 
-const field = "w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-200";
-const label = "block text-[11px] text-neutral-500";
+const field = "w-full rounded border border-line bg-canvas px-2 py-1 text-xs text-fg";
+const label = "block text-[11px] text-faint";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-b border-neutral-800 px-3 py-3">
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+    <div className="border-b border-line px-3 py-3">
+      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
         {title}
       </h3>
       <div className="space-y-2">{children}</div>
@@ -67,13 +67,13 @@ function MultiSelectionProps({ elements }: { elements: SlideElement[] }) {
 
   const bounds = boundsOf(elements);
   const allLocked = elements.every((el) => el.locked);
-  const small = "rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700 disabled:opacity-35";
+  const small = "rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover disabled:opacity-35";
 
   return (
     <>
       <Section title={`${elements.length} elements selected`}>
         {bounds && (
-          <div className="text-[11px] text-neutral-500">
+          <div className="text-[11px] text-faint">
             {Math.round(bounds.x)}, {Math.round(bounds.y)} · {Math.round(bounds.w)}×
             {Math.round(bounds.h)}
           </div>
@@ -129,7 +129,7 @@ function MultiSelectionProps({ elements }: { elements: SlideElement[] }) {
         <button onClick={duplicateSelection} className={`${small} w-full`}>
           Duplicate (Ctrl+D)
         </button>
-        <label className="flex items-center gap-2 pt-1 text-[11px] text-neutral-400">
+        <label className="flex items-center gap-2 pt-1 text-[11px] text-muted">
           <input
             type="checkbox"
             checked={allLocked}
@@ -139,7 +139,7 @@ function MultiSelectionProps({ elements }: { elements: SlideElement[] }) {
         </label>
         <button
           onClick={deleteSelection}
-          className="w-full rounded bg-red-900/60 px-2 py-1 text-[11px] text-red-200 hover:bg-red-800"
+          className="w-full rounded bg-danger-soft px-2 py-1 text-[11px] text-danger hover:bg-danger hover:text-canvas"
         >
           Delete {elements.length} elements
         </button>
@@ -177,7 +177,7 @@ function ElementProps({ element }: { element: SlideElement }) {
             onChange={(rotation) => patch((el) => ({ ...el, rotation }))}
           />
         </div>
-        <label className="flex items-center gap-2 pt-1 text-[11px] text-neutral-400">
+        <label className="flex items-center gap-2 pt-1 text-[11px] text-muted">
           <input
             type="checkbox"
             checked={element.locked}
@@ -202,7 +202,7 @@ function ElementProps({ element }: { element: SlideElement }) {
               key={mode}
               title={`Align ${mode} on the slide`}
               onClick={() => alignSelection(mode, "slide")}
-              className="rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700"
+              className="rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover"
             >
               {text}
             </button>
@@ -220,7 +220,7 @@ function ElementProps({ element }: { element: SlideElement }) {
             <button
               key={direction}
               onClick={() => reorderElement(element.id, direction)}
-              className="rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700"
+              className="rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover"
             >
               {text}
             </button>
@@ -228,7 +228,7 @@ function ElementProps({ element }: { element: SlideElement }) {
         </div>
         <button
           onClick={() => deleteElement(element.id)}
-          className="w-full rounded bg-red-900/60 px-2 py-1 text-[11px] text-red-200 hover:bg-red-800"
+          className="w-full rounded bg-danger-soft px-2 py-1 text-[11px] text-danger hover:bg-danger hover:text-canvas"
         >
           Delete element
         </button>
@@ -264,7 +264,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                   )
                 }
                 className={`flex-1 rounded px-2 py-1 text-[11px] ${
-                  element.style[k] ? "bg-sky-700 text-white" : "bg-neutral-800 text-neutral-300"
+                  element.style[k] ? "bg-accent text-accent-fg" : "bg-raised text-muted"
                 }`}
               >
                 {k === "bold" ? "B" : k === "italic" ? "I" : "U"}
@@ -279,7 +279,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                   patch((el) => (el.kind === "text" ? { ...el, style: { ...el.style, align: a } } : el))
                 }
                 className={`flex-1 rounded px-2 py-1 text-[11px] ${
-                  element.style.align === a ? "bg-sky-700 text-white" : "bg-neutral-800 text-neutral-300"
+                  element.style.align === a ? "bg-accent text-accent-fg" : "bg-raised text-muted"
                 }`}
               >
                 {a}
@@ -294,7 +294,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                   patch((el) => (el.kind === "text" ? { ...el, style: { ...el.style, valign: v } } : el))
                 }
                 className={`flex-1 rounded px-2 py-1 text-[11px] ${
-                  element.style.valign === v ? "bg-sky-700 text-white" : "bg-neutral-800 text-neutral-300"
+                  element.style.valign === v ? "bg-accent text-accent-fg" : "bg-raised text-muted"
                 }`}
               >
                 {v}
@@ -312,7 +312,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                     el.kind === "text" ? { ...el, style: { ...el.style, color: e.target.value } } : el,
                   )
                 }
-                className="h-7 w-10 rounded border border-neutral-700 bg-neutral-950"
+                className="h-7 w-10 rounded border border-line bg-canvas"
               />
               <button
                 onClick={() =>
@@ -322,7 +322,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                     return { ...el, style };
                   })
                 }
-                className="flex-1 rounded bg-neutral-800 px-2 text-[11px] text-neutral-300 hover:bg-neutral-700"
+                className="flex-1 rounded bg-raised px-2 text-[11px] text-muted hover:bg-raised-hover"
               >
                 Use theme
               </button>
@@ -338,7 +338,7 @@ function ElementProps({ element }: { element: SlideElement }) {
             onClick={() =>
               patch((el) => (el.kind === "tab" ? { ...el, text: padTabLines(el.text) } : el))
             }
-            className="w-full rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700"
+            className="w-full rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover"
           >
             Complete — even out line lengths
           </button>
@@ -371,7 +371,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                   patch((el) => (el.kind === "tab" ? { ...el, style: { ...el.style, valign: v } } : el))
                 }
                 className={`flex-1 rounded px-2 py-1 text-[11px] ${
-                  element.style.valign === v ? "bg-sky-700 text-white" : "bg-neutral-800 text-neutral-300"
+                  element.style.valign === v ? "bg-accent text-accent-fg" : "bg-raised text-muted"
                 }`}
               >
                 {v}
@@ -389,7 +389,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                     el.kind === "tab" ? { ...el, style: { ...el.style, color: e.target.value } } : el,
                   )
                 }
-                className="h-7 w-10 rounded border border-neutral-700 bg-neutral-950"
+                className="h-7 w-10 rounded border border-line bg-canvas"
               />
               <button
                 onClick={() =>
@@ -399,7 +399,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                     return { ...el, style };
                   })
                 }
-                className="flex-1 rounded bg-neutral-800 px-2 text-[11px] text-neutral-300 hover:bg-neutral-700"
+                className="flex-1 rounded bg-raised px-2 text-[11px] text-muted hover:bg-raised-hover"
               >
                 Use theme
               </button>
@@ -426,7 +426,7 @@ function ElementProps({ element }: { element: SlideElement }) {
               <option value="fill">fill</option>
             </select>
           </label>
-          <p className="truncate text-[10px] text-neutral-600" title={element.src}>
+          <p className="truncate text-[10px] text-faint" title={element.src}>
             {element.src}
           </p>
         </Section>
@@ -460,7 +460,7 @@ function ElementProps({ element }: { element: SlideElement }) {
               onChange={(e) =>
                 patch((el) => (el.kind === "shape" ? { ...el, fill: e.target.value } : el))
               }
-              className="mt-0.5 h-7 w-full rounded border border-neutral-700 bg-neutral-950"
+              className="mt-0.5 h-7 w-full rounded border border-line bg-canvas"
             />
           </label>
           <NumberField
@@ -479,7 +479,7 @@ function ElementProps({ element }: { element: SlideElement }) {
                 onChange={(e) =>
                   patch((el) => (el.kind === "shape" ? { ...el, stroke: e.target.value } : el))
                 }
-                className="mt-0.5 h-7 w-full rounded border border-neutral-700 bg-neutral-950"
+                className="mt-0.5 h-7 w-full rounded border border-line bg-canvas"
               />
             </label>
           )}
@@ -507,7 +507,7 @@ export function PropertiesPanel() {
   const selected = (slide?.elements ?? []).filter((el) => selectedIds.includes(el.id));
 
   return (
-    <aside className="flex h-full w-64 flex-col overflow-y-auto border-l border-neutral-800 bg-neutral-900">
+    <aside className="flex h-full w-64 flex-col overflow-y-auto border-l border-line bg-panel">
       {selected.length > 1 ? (
         <MultiSelectionProps elements={selected} />
       ) : selected.length === 1 ? (
@@ -515,7 +515,7 @@ export function PropertiesPanel() {
       ) : (
         <>
           <Section title="Slide">
-            <div className="text-[11px] text-neutral-500">
+            <div className="text-[11px] text-faint">
               Format: 16:9 · {SLIDE_W}×{SLIDE_H}
             </div>
             {slide && (
@@ -532,7 +532,7 @@ export function PropertiesPanel() {
                   <span className={label}>
                     Background{" "}
                     {slide.background === undefined && (
-                      <span className="text-neutral-600">(inherited from theme)</span>
+                      <span className="text-faint">(inherited from theme)</span>
                     )}
                   </span>
                   <div className="mt-1">
@@ -578,8 +578,8 @@ export function PropertiesPanel() {
                   onClick={() => setSlideLayout(current, l.id)}
                   className={`aspect-[16/10] rounded border-2 p-1 disabled:opacity-30 ${
                     slide?.layout === l.id
-                      ? "border-sky-500 bg-neutral-800"
-                      : "border-neutral-700 bg-neutral-950 hover:border-neutral-500"
+                      ? "border-accent bg-raised"
+                      : "border-line bg-canvas hover:border-faint"
                   }`}
                 >
                   <LayoutGlyph id={l.id} />
@@ -596,17 +596,17 @@ export function PropertiesPanel() {
                   onClick={() => setTheme(preset)}
                   className={`flex w-full items-center gap-2 rounded border px-2 py-1 text-left text-[11px] ${
                     deck.theme.preset === preset.preset
-                      ? "border-sky-500 text-neutral-100"
-                      : "border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                      ? "border-accent text-fg"
+                      : "border-line text-muted hover:border-faint"
                   }`}
                 >
                   <span
-                    className="h-4 w-6 flex-shrink-0 rounded-sm border border-black/30"
+                    className="h-4 w-6 flex-shrink-0 rounded-sm border border-line"
                     style={{
                       // Presets are all flat colors today, but `background` is a
                       // union now — don't hand an object to CSS if that changes.
                       background:
-                        preset.background.kind === "color" ? preset.background.color : "#555",
+                        preset.background.kind === "color" ? preset.background.color : "var(--color-raised)",
                     }}
                   >
                     <span
@@ -636,7 +636,7 @@ export function PropertiesPanel() {
                 type="color"
                 value={deck.theme.text}
                 onChange={(e) => setTheme({ text: e.target.value, preset: "custom" })}
-                className="mt-0.5 h-7 w-full rounded border border-neutral-700 bg-neutral-950"
+                className="mt-0.5 h-7 w-full rounded border border-line bg-canvas"
               />
             </label>
           </Section>
@@ -648,7 +648,7 @@ export function PropertiesPanel() {
 
 /** Tiny wireframe preview of a layout, like Impress's layout swatches. */
 function LayoutGlyph({ id }: { id: string }) {
-  const bar = "bg-sky-500/70 rounded-[1px]";
+  const bar = "bg-accent rounded-[1px]";
   if (id === "blank") return <div className="h-full w-full" />;
   if (id === "title") return <div className={`${bar} h-1.5 w-full`} />;
   if (id === "centered")

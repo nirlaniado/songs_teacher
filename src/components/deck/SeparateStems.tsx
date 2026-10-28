@@ -54,16 +54,16 @@ export function SeparateStems() {
   };
 
   return (
-    <div className="border-t border-neutral-800 px-3 py-2">
+    <div className="border-t border-line px-3 py-2">
       {!running ? (
         <div className="flex items-center gap-2">
           <button
             onClick={() => void run()}
-            className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-700"
+            className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
           >
             Separate stems
           </button>
-          <span className="text-[11px] text-neutral-600">
+          <span className="text-[11px] text-faint">
             Splits the track into drums, bass, vocals and other, so you can mute or solo
             each one.
             {cached === false && " First run downloads a ~172MB model."}
@@ -72,9 +72,9 @@ export function SeparateStems() {
         </div>
       ) : (
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-[11px] text-neutral-300">
+          <div className="flex items-center gap-2 text-[11px] text-muted">
             <span>{progress ? label[progress.stage] : "Starting"}…</span>
-            {progress?.detail && <span className="text-neutral-500">{progress.detail}</span>}
+            {progress?.detail && <span className="text-faint">{progress.detail}</span>}
             <button
               onClick={() => {
                 // Inference can't actually be interrupted mid-segment; this
@@ -82,28 +82,28 @@ export function SeparateStems() {
                 cancelledRef.current = true;
                 setRunning(false);
               }}
-              className="ml-auto text-neutral-500 hover:text-red-400"
+              className="ml-auto text-faint hover:text-danger"
             >
               Cancel
             </button>
           </div>
-          <div className="h-1 overflow-hidden rounded bg-neutral-800">
+          <div className="h-1 overflow-hidden rounded bg-raised">
             <div
-              className="h-full bg-sky-600 transition-[width]"
+              className="h-full bg-accent transition-[width]"
               style={{
                 width: progress?.fraction != null ? `${Math.round(progress.fraction * 100)}%` : "100%",
                 opacity: progress?.fraction == null ? 0.4 : 1,
               }}
             />
           </div>
-          <p className="text-[10px] text-neutral-600">
+          <p className="text-[10px] text-faint">
             This takes several minutes and works the CPU hard. Keep this tab open.
           </p>
         </div>
       )}
 
       {error && (
-        <p className="mt-1 rounded border border-red-900 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">
+        <p className="mt-1 rounded border border-danger-soft bg-danger-soft px-2 py-1 text-[11px] text-danger">
           {error}
         </p>
       )}

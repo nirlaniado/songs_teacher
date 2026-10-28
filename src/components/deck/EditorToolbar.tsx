@@ -129,19 +129,19 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
   }
 
   const btn =
-    "rounded px-2 py-1 text-xs text-neutral-200 hover:bg-neutral-700 disabled:opacity-35 disabled:hover:bg-transparent";
+    "rounded px-2 py-1 text-xs text-fg hover:bg-raised-hover disabled:opacity-35 disabled:hover:bg-transparent";
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-neutral-800 bg-neutral-900 px-3 py-1.5">
+    <div className="flex flex-wrap items-center gap-1 border-b border-line bg-panel px-3 py-1.5">
       <input
         value={deck?.title ?? ""}
         onChange={(e) => setTitle(e.target.value)}
-        className="mr-2 w-52 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-neutral-100 hover:border-neutral-700 focus:border-neutral-600 focus:outline-none"
+        className="mr-2 w-52 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-fg hover:border-line focus:border-faint focus:outline-none"
         placeholder="Untitled presentation"
         aria-label="Presentation title"
       />
 
-      <span className="mx-1 h-4 w-px bg-neutral-800" />
+      <span className="mx-1 h-4 w-px bg-raised" />
 
       <button
         className={btn}
@@ -181,7 +181,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         </button>
         {tuningMenu && (
           <div
-            className="absolute left-0 top-full z-40 mt-1 w-56 rounded border border-neutral-700 bg-neutral-900 py-1 shadow-xl"
+            className="absolute left-0 top-full z-40 mt-1 w-56 rounded border border-line bg-panel py-1 shadow-xl"
             onMouseLeave={() => setTuningMenu(false)}
           >
             {TUNING_PRESETS.map(({ id, label }) => (
@@ -191,7 +191,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
                   setTuningMenu(false);
                   insertTab(id);
                 }}
-                className="block w-full px-3 py-1 text-left text-[11px] text-neutral-200 hover:bg-neutral-800"
+                className="block w-full px-3 py-1 text-left text-[11px] text-fg hover:bg-raised"
               >
                 {label}
               </button>
@@ -217,7 +217,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         </button>
         {shapeMenu && (
           <div
-            className="absolute left-0 top-full z-40 mt-1 w-40 rounded border border-neutral-700 bg-neutral-900 py-1 shadow-xl"
+            className="absolute left-0 top-full z-40 mt-1 w-40 rounded border border-line bg-panel py-1 shadow-xl"
             onMouseLeave={() => setShapeMenu(false)}
           >
             {SHAPES.map(({ shape, label }) => (
@@ -227,7 +227,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
                   setShapeMenu(false);
                   addElement(newShape(shape));
                 }}
-                className="block w-full px-3 py-1 text-left text-[11px] text-neutral-200 hover:bg-neutral-800"
+                className="block w-full px-3 py-1 text-left text-[11px] text-fg hover:bg-raised"
               >
                 {label}
               </button>
@@ -236,7 +236,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         )}
       </div>
 
-      <span className="mx-1 h-4 w-px bg-neutral-800" />
+      <span className="mx-1 h-4 w-px bg-raised" />
 
       {/* Arrange — Impress's Shape ▸ Arrange, on the selection. */}
       <button
@@ -276,7 +276,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         ⤓
       </button>
 
-      <span className="mx-1 h-4 w-px bg-neutral-800" />
+      <span className="mx-1 h-4 w-px bg-raised" />
 
       {/* Align. One element aligns to the slide, several to each other. */}
       {ALIGNMENTS.map(({ mode, glyph, label }) => (
@@ -319,11 +319,11 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         ⧉
       </button>
 
-      <span className="mx-1 h-4 w-px bg-neutral-800" />
+      <span className="mx-1 h-4 w-px bg-raised" />
 
       {/* View — grid, snapping and zoom. */}
       <button
-        className={`${btn} ${showGrid ? "bg-neutral-700" : ""}`}
+        className={`${btn} ${showGrid ? "bg-raised-hover" : ""}`}
         onClick={toggleGrid}
         title="Show grid"
         aria-label="Show grid"
@@ -331,7 +331,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         ▦
       </button>
       <button
-        className={`${btn} ${snapEnabled ? "bg-neutral-700" : ""}`}
+        className={`${btn} ${snapEnabled ? "bg-raised-hover" : ""}`}
         onClick={toggleSnap}
         title="Snap to guides — hold Alt while dragging to suspend"
         aria-label="Snap to guides"
@@ -342,7 +342,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         value={zoom === "fit" ? "fit" : String(zoom)}
         onChange={(e) => setZoom(e.target.value === "fit" ? "fit" : Number(e.target.value))}
         title="Zoom"
-        className="rounded border border-neutral-700 bg-neutral-950 px-1.5 py-1 text-[11px] text-neutral-200"
+        className="rounded border border-line bg-canvas px-1.5 py-1 text-[11px] text-fg"
       >
         <option value="fit">Fit</option>
         {ZOOM_STEPS.map((step) => (
@@ -352,7 +352,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         ))}
       </select>
 
-      <span className="mx-1 h-4 w-px bg-neutral-800" />
+      <span className="mx-1 h-4 w-px bg-raised" />
 
       <button className={btn} onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
         ↶
@@ -362,11 +362,11 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
       </button>
 
       <div className="ml-auto flex items-center gap-2">
-        {dirty && <span className="text-[11px] text-amber-500">Unsaved</span>}
+        {dirty && <span className="text-[11px] text-warning">Unsaved</span>}
         <button
           onClick={() => void saveDeck()}
           disabled={!dirty || saving}
-          className="rounded bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200 disabled:opacity-40"
+          className="rounded bg-raised px-2.5 py-1 text-xs text-fg disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save"}
         </button>
@@ -378,14 +378,14 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
               ? "Download as a .zip — you'll be asked whether to include the stems"
               : "Download the presentation and its media as a .zip"
           }
-          className="rounded bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200 disabled:opacity-40"
+          className="rounded bg-raised px-2.5 py-1 text-xs text-fg disabled:opacity-40"
         >
           {exporting ? "Packing…" : "⭳ Download"}
         </button>
         <button
           onClick={onPresent}
           disabled={!deck || deck.slides.length === 0}
-          className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
+          className="rounded bg-accent px-3 py-1 text-xs font-medium text-accent-fg disabled:opacity-40"
         >
           ▶ Present
         </button>

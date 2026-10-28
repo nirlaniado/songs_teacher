@@ -514,7 +514,7 @@ export function SlideCanvas() {
   return (
     <div
       ref={wrapRef}
-      className="relative flex flex-1 items-center justify-center overflow-auto bg-neutral-800/60 p-6"
+      className="relative flex flex-1 items-center justify-center overflow-auto bg-raised p-6"
       onPointerDown={startMarquee}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -543,7 +543,7 @@ export function SlideCanvas() {
           theme={deck.theme}
           scale={scale}
           assetUrls={assetUrls}
-          className="shadow-2xl ring-1 ring-black/40"
+          className="shadow-2xl ring-1 ring-line"
           surfaceRef={surfaceRef}
           // The element being edited is drawn by the inline field below, not
           // by the renderer — otherwise its text shows through and doubles.
@@ -561,7 +561,7 @@ export function SlideCanvas() {
                     top: 0,
                     width: Math.max(1 / scale, 0.5),
                     height: SLIDE_H,
-                    background: x % (GRID_SIZE * 4) === 0 ? "#38bdf833" : "#94a3b81f",
+                    background: x % (GRID_SIZE * 4) === 0 ? "var(--color-accent-soft)" : "var(--color-grid)",
                   }}
                 />
               ))}
@@ -574,7 +574,7 @@ export function SlideCanvas() {
                     left: 0,
                     height: Math.max(1 / scale, 0.5),
                     width: SLIDE_W,
-                    background: y % (GRID_SIZE * 4) === 0 ? "#38bdf833" : "#94a3b81f",
+                    background: y % (GRID_SIZE * 4) === 0 ? "var(--color-accent-soft)" : "var(--color-grid)",
                   }}
                 />
               ))}
@@ -596,7 +596,7 @@ export function SlideCanvas() {
                 ...elementStyle(el),
                 cursor: el.locked ? "not-allowed" : "move",
                 outline: selectedIds.includes(el.id)
-                  ? `${2 / scale}px solid #38bdf8`
+                  ? `${2 / scale}px solid var(--color-accent)`
                   : `${1 / scale}px dashed transparent`,
                 outlineOffset: 0,
                 background: "transparent",
@@ -614,7 +614,7 @@ export function SlideCanvas() {
                 top: 0,
                 width: Math.max(1 / scale, 0.5),
                 height: SLIDE_H,
-                background: "#f472b6",
+                background: "var(--color-guide)",
                 pointerEvents: "none",
               }}
             />
@@ -628,7 +628,7 @@ export function SlideCanvas() {
                 left: 0,
                 height: Math.max(1 / scale, 0.5),
                 width: SLIDE_W,
-                background: "#f472b6",
+                background: "var(--color-guide)",
                 pointerEvents: "none",
               }}
             />
@@ -643,8 +643,8 @@ export function SlideCanvas() {
                 top: marquee.y,
                 width: marquee.w,
                 height: marquee.h,
-                border: `${1 / scale}px dashed #38bdf8`,
-                background: "#38bdf81a",
+                border: `${1 / scale}px dashed var(--color-accent)`,
+                background: "var(--color-accent-soft)",
                 pointerEvents: "none",
               }}
             />
@@ -659,7 +659,7 @@ export function SlideCanvas() {
                 top: selectionBounds.y,
                 width: selectionBounds.w,
                 height: selectionBounds.h,
-                border: `${1 / scale}px dashed #7dd3fc`,
+                border: `${1 / scale}px dashed var(--color-accent-light)`,
                 pointerEvents: "none",
               }}
             />
@@ -685,8 +685,8 @@ export function SlideCanvas() {
                         top: el.y + el.h * pos.y - size / 2,
                         width: size,
                         height: size,
-                        background: "#38bdf8",
-                        border: `${1 / scale}px solid #0c4a6e`,
+                        background: "var(--color-accent)",
+                        border: `${1 / scale}px solid var(--color-accent-fg)`,
                         cursor: `${h}-resize`,
                       }}
                     />
@@ -704,7 +704,7 @@ export function SlideCanvas() {
                   top: selectionBounds.y - ROTATE_ARM,
                   width: Math.max(1 / scale, 0.5),
                   height: ROTATE_ARM,
-                  background: "#38bdf8",
+                  background: "var(--color-accent)",
                   pointerEvents: "none",
                 }}
               />
@@ -718,8 +718,8 @@ export function SlideCanvas() {
                   width: 14 / scale,
                   height: 14 / scale,
                   borderRadius: "50%",
-                  background: "#0ea5e9",
-                  border: `${1 / scale}px solid #0c4a6e`,
+                  background: "var(--color-accent)",
+                  border: `${1 / scale}px solid var(--color-accent-fg)`,
                   cursor: "grab",
                 }}
               />
@@ -743,8 +743,8 @@ export function SlideCanvas() {
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: JUSTIFY[editing.style.valign],
-                background: "#38bdf822",
-                outline: `${2 / scale}px solid #38bdf8`,
+                background: "var(--color-accent-soft)",
+                outline: `${2 / scale}px solid var(--color-accent)`,
                 // Grows to fit what's being typed instead of staying clamped
                 // to the element's saved height — otherwise a short box (the
                 // default text frame is 120 units tall) clips everything past
@@ -850,7 +850,7 @@ export function SlideCanvas() {
             ))}
         </SlideRenderer>
       ) : (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-faint">
           This deck has no slides yet — add one from the panel on the left.
         </p>
       )}
@@ -866,9 +866,9 @@ export function SlideCanvas() {
         <div
           ref={bendPaletteRef}
           onPointerDown={(e) => e.stopPropagation()}
-          className="absolute bottom-2 right-3 flex items-center gap-1 rounded border border-neutral-700 bg-neutral-900/95 px-1.5 py-1 shadow-lg"
+          className="absolute bottom-2 right-3 flex items-center gap-1 rounded border border-line bg-panel px-1.5 py-1 shadow-lg"
         >
-          <span className="pr-1 text-[10px] text-neutral-500">Bend</span>
+          <span className="pr-1 text-[10px] text-faint">Bend</span>
           {BEND_MARKS.map(({ glyph, snippet, title }) => (
             <button
               key={snippet}
@@ -880,13 +880,13 @@ export function SlideCanvas() {
               // "end of text" after a blur.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => insertBend(snippet)}
-              className="min-w-[1.75rem] rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-200 hover:bg-neutral-700"
+              className="min-w-[1.75rem] rounded bg-raised px-1.5 py-0.5 text-[11px] text-fg hover:bg-raised-hover"
             >
               {glyph}
             </button>
           ))}
 
-          <span className="mx-0.5 h-4 w-px bg-neutral-700" />
+          <span className="mx-0.5 h-4 w-px bg-raised-hover" />
 
           {/* Any amount, not just the three presets — typed verbatim, same as
               everywhere else in the app. This field is meant to take focus
@@ -908,7 +908,7 @@ export function SlideCanvas() {
             placeholder="amt"
             title='Any bend amount, e.g. "1/4" or "2" — Enter to insert'
             aria-label="Bend amount"
-            className="w-12 rounded border border-neutral-700 bg-neutral-950 px-1 py-0.5 text-[11px] text-neutral-200 placeholder:text-neutral-600"
+            className="w-12 rounded border border-line bg-canvas px-1 py-0.5 text-[11px] text-fg placeholder:text-faint"
           />
           <button
             type="button"
@@ -921,7 +921,7 @@ export function SlideCanvas() {
               insertBend(amount);
               setCustomBend("");
             }}
-            className="rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-200 hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800"
+            className="rounded bg-raised px-1.5 py-0.5 text-[11px] text-fg hover:bg-raised-hover disabled:opacity-40 disabled:hover:bg-raised"
           >
             +
           </button>
@@ -929,7 +929,7 @@ export function SlideCanvas() {
       )}
 
       {/* Status readout, like Impress's status bar. */}
-      <div className="pointer-events-none absolute bottom-2 left-3 flex gap-3 text-[10px] text-neutral-500">
+      <div className="pointer-events-none absolute bottom-2 left-3 flex gap-3 text-[10px] text-faint">
         <span>{Math.round(scale * 100)}%</span>
         {selected.length > 0 && (
           <span>

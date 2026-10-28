@@ -22,14 +22,14 @@ export function SlidePanel() {
   if (!deck) return null;
 
   return (
-    <div className="flex h-full w-44 flex-col border-r border-neutral-800 bg-neutral-900">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1.5">
-        <span className="text-xs font-medium text-neutral-400">Slides</span>
+    <div className="flex h-full w-44 flex-col border-r border-line bg-panel">
+      <div className="flex items-center justify-between border-b border-line px-2 py-1.5">
+        <span className="text-xs font-medium text-muted">Slides</span>
         <button
           onClick={() => addSlide()}
           title="New slide"
           aria-label="New slide"
-          className="rounded bg-neutral-800 px-1.5 text-sm text-neutral-200 hover:bg-neutral-700"
+          className="rounded bg-raised px-1.5 text-sm text-fg hover:bg-raised-hover"
         >
           +
         </button>
@@ -53,23 +53,23 @@ export function SlidePanel() {
               onClick={() => selectSlide(i)}
               aria-label={`Slide ${i + 1}: ${slide.name}`}
               className={`block w-full rounded border-2 ${
-                i === current ? "border-sky-500" : "border-transparent hover:border-neutral-700"
+                i === current ? "border-accent" : "border-transparent hover:border-line"
               }`}
             >
               <div className="flex items-start gap-1">
-                <span className="w-4 pt-1 text-right text-[10px] text-neutral-500">{i + 1}</span>
+                <span className="w-4 pt-1 text-right text-[10px] text-faint">{i + 1}</span>
                 <SlideRenderer
                   slide={slide}
                   theme={deck.theme}
                   scale={THUMB_SCALE}
                   assetUrls={assetUrls}
-                  className="ring-1 ring-black/30"
+                  className="ring-1 ring-line"
                 />
               </div>
             </button>
 
             {slide.startTime !== undefined && (
-              <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-emerald-700/90 px-1 text-[9px] tabular-nums text-white">
+              <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-accent px-1 text-[9px] tabular-nums text-accent-fg">
                 {formatCue(slide.startTime)}
               </span>
             )}
@@ -79,7 +79,7 @@ export function SlidePanel() {
                 onClick={() => duplicateSlide(i)}
                 title="Duplicate"
                 aria-label={`Duplicate slide ${i + 1}`}
-                className="rounded bg-neutral-800/90 px-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
+                className="rounded bg-raised px-1 text-[10px] text-muted hover:bg-raised-hover"
               >
                 ⧉
               </button>
@@ -89,7 +89,7 @@ export function SlidePanel() {
                 }}
                 title="Delete"
                 aria-label={`Delete slide ${i + 1}`}
-                className="rounded bg-neutral-800/90 px-1 text-[10px] text-neutral-300 hover:bg-red-700"
+                className="rounded bg-raised px-1 text-[10px] text-muted hover:bg-danger hover:text-canvas"
               >
                 ✕
               </button>
@@ -97,7 +97,7 @@ export function SlidePanel() {
           </li>
         ))}
         {deck.slides.length === 0 && (
-          <li className="px-1 py-4 text-center text-[11px] text-neutral-600">
+          <li className="px-1 py-4 text-center text-[11px] text-faint">
             No slides. Press + to add one.
           </li>
         )}
