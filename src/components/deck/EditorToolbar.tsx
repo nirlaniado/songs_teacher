@@ -135,7 +135,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
       <Field
         value={deck?.title ?? ""}
         onChange={(e) => setTitle(e.target.value)}
-        className="mr-1 w-44 border-transparent bg-transparent font-medium hover:border-line"
+        className="mr-1 w-40 border-transparent bg-transparent font-medium hover:border-line"
         placeholder="Untitled presentation"
         aria-label="Presentation title"
       />
