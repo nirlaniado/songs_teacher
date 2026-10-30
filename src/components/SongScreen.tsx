@@ -5,6 +5,7 @@ import { Waveform } from "./Waveform.js";
 import { Transport } from "./Transport.js";
 import { SectionList } from "./SectionList.js";
 import { SlideView } from "./SlideView.js";
+import { Button } from "./controls.js";
 
 /** The vertical slice: one song, its player, its sections, its driven slide. */
 export function SongScreen() {
@@ -32,9 +33,9 @@ export function SongScreen() {
   return (
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-6">
       <div className="flex items-center justify-between">
-        <button onClick={handleClose} className="text-sm text-faint hover:text-muted">
+        <Button variant="subtle" onClick={handleClose}>
           ← Library
-        </button>
+        </Button>
         <div className="text-right">
           <h1 className="text-lg font-semibold text-fg">{song.title}</h1>
           {song.artist && <p className="text-xs text-faint">{song.artist}</p>}
@@ -44,7 +45,7 @@ export function SongScreen() {
       {song.audio && audioHandle ? (
         <Waveform audioUrl={audioHandle.url} />
       ) : (
-        <div className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-faint">
+        <div className="rounded-surface border border-dashed border-line px-4 py-8 text-center text-sm text-faint">
           This song has no audio file. Its sections and analysis are intact — see the notes
           for where the audio used to come from.
         </div>

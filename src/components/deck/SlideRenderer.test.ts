@@ -41,3 +41,54 @@ describe("SlideRenderer colours come from the deck, never from the app's tokens"
     expect(leaks(html)).toBe(false);
   });
 });
+
+// Renders one deck's slide at the three mounted scales and pins the exact output: control styling reaching a slide
+// through this component would change these, and a slide is what a class sees on the projector.
+describe("SlideRenderer draws a slide the same at every scale", () => {
+  const theme = Theme.parse({ background: { kind: "color", color: "#fafafa" }, text: "#222222" });
+  const slide = Slide.parse({
+    id: "00000000-0000-4000-8000-000000000001",
+    elements: [
+      { kind: "text", id: "00000000-0000-4000-8000-000000000002", x: 80, y: 60, w: 1120, h: 140, text: "Verse 1", role: "title" },
+      { kind: "tab", id: "00000000-0000-4000-8000-000000000003", x: 80, y: 240, w: 560, h: 200, text: "e|---0---|\nB|---1---|" },
+      { kind: "shape", id: "00000000-0000-4000-8000-000000000004", x: 700, y: 240, w: 320, h: 200, shape: "roundRect", strokeWidth: 2 },
+      { kind: "image", id: "00000000-0000-4000-8000-000000000005", x: 700, y: 460, w: 320, h: 200, src: "assets/a.png", fit: "contain" },
+    ],
+  });
+
+  it.each([
+    ["thumbnail", 0.115],
+    ["canvas", 0.6],
+    ["Present", 1.125],
+  ])("at %s scale", (_mount, scale) => {
+    expect(render(slide, theme, scale)).toMatchSnapshot();
+  });
+
+  it.each([0.115, 0.6, 1.125])("carries no control class, radius or motion at scale %s", (scale) => {
+    const classes = [...render(slide, theme, scale).matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/));
+    expect(classes.filter((c) => /^(control|field|menu-item|tile|row|pop|fade|panel-rise|rounded|transition|animate)/.test(c))).toEqual([]);
+    expect(render(slide, theme, scale)).not.toMatch(/transition|animation|var\(--(motion|radius|press|enter)/);
+  });
+
+  it("does not depend on the controls", () => {
+    const source = readFileSync(new URL("./SlideRenderer.tsx", import.meta.url), "utf8");
+    expect(source).not.toMatch(/controls\.js|index\.css/);
+  });
+});
+
+describe("the thumbnail rail keeps control styling away from the slide it wraps", () => {
+  const rail = readFileSync(new URL("./SlidePanel.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../index.css", import.meta.url), "utf8");
+
+  it("wraps the renderer in a plain slide-thumb, never a Button that would press-scale it", () => {
+    const wrapper = rail.slice(rail.lastIndexOf("<", rail.lastIndexOf("slide-thumb")), rail.indexOf("<SlideRenderer"));
+    expect(wrapper).toMatch(/^<button/);
+    expect(wrapper).not.toMatch(/control|<Button/);
+  });
+
+  it("gives slide-thumb no transform, transition or type styles of its own", () => {
+    const rules = [...css.matchAll(/\.slide-thumb(?:\[[^\]]*\])?(?:::after)? \{([^}]*)\}/g)].map((m) => m[1]!).join("");
+    expect(rules).toContain("position: relative");
+    expect(rules).not.toMatch(/transform|font|letter-spacing|line-height|color:/);
+  });
+});

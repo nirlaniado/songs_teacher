@@ -3,6 +3,7 @@ import { formatCue } from "../../schema/deck.js";
 import { useDeckStore } from "../../store/deckStore.js";
 import { SlideRenderer, imagePathsOf } from "./SlideRenderer.js";
 import { useDeckAssets } from "./useDeckAssets.js";
+import { Button } from "../controls.js";
 
 const THUMB_SCALE = 0.115; // 1280x720 -> ~147x83
 
@@ -25,14 +26,13 @@ export function SlidePanel() {
     <div className="flex h-full w-44 flex-col border-r border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-2 py-1.5">
         <span className="text-xs font-medium text-muted">Slides</span>
-        <button
+        <Button size="sm" icon
           onClick={() => addSlide()}
           title="New slide"
           aria-label="New slide"
-          className="rounded bg-raised px-1.5 text-sm text-fg hover:bg-raised-hover"
         >
           +
-        </button>
+        </Button>
       </div>
 
       <ul className="flex-1 space-y-2 overflow-y-auto p-2">
@@ -51,10 +51,8 @@ export function SlidePanel() {
           >
             <button
               onClick={() => selectSlide(i)}
-              aria-label={`Slide ${i + 1}: ${slide.name}`}
-              className={`block w-full rounded border-2 ${
-                i === current ? "border-accent" : "border-transparent hover:border-line"
-              }`}
+              aria-current={i === current ? "true" : undefined}
+              aria-label={`Slide ${i + 1}: ${slide.name}`} className="slide-thumb block w-full rounded-slide border-2 border-transparent hover:border-line"
             >
               <div className="flex items-start gap-1">
                 <span className="w-4 pt-1 text-right text-[10px] text-faint">{i + 1}</span>
@@ -69,30 +67,28 @@ export function SlidePanel() {
             </button>
 
             {slide.startTime !== undefined && (
-              <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded bg-accent px-1 text-[9px] tabular-nums text-accent-fg">
+              <span className="pointer-events-none absolute bottom-0.5 right-0.5 rounded-control bg-accent px-1 text-[9px] tabular-nums text-accent-fg">
                 {formatCue(slide.startTime)}
               </span>
             )}
 
-            <div className="absolute right-0.5 top-0.5 hidden gap-0.5 group-hover:flex">
-              <button
+            <div className="fade absolute right-0.5 top-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100">
+              <Button size="sm" icon
                 onClick={() => duplicateSlide(i)}
                 title="Duplicate"
                 aria-label={`Duplicate slide ${i + 1}`}
-                className="rounded bg-raised px-1 text-[10px] text-muted hover:bg-raised-hover"
               >
                 ⧉
-              </button>
-              <button
+              </Button>
+              <Button size="sm" icon className="hover:text-danger"
                 onClick={() => {
                   if (confirm(`Delete slide ${i + 1}?`)) deleteSlide(i);
                 }}
                 title="Delete"
                 aria-label={`Delete slide ${i + 1}`}
-                className="rounded bg-raised px-1 text-[10px] text-muted hover:bg-danger hover:text-canvas"
               >
                 ✕
-              </button>
+              </Button>
             </div>
           </li>
         ))}

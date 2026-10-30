@@ -1,5 +1,6 @@
 import { usePlayerStore } from "../store/playerStore.js";
 import { useLibraryStore } from "../store/libraryStore.js";
+import { Button } from "./controls.js";
 
 function formatTime(t: number): string {
   if (!Number.isFinite(t)) return "0:00";
@@ -27,15 +28,14 @@ export function Transport() {
   const title = useLibraryStore((s) => s.currentSong?.title ?? "");
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-line bg-panel px-4 py-2">
-      <button
+    <div className="flex items-center gap-4 rounded-surface border border-line bg-panel px-4 py-2">
+      <Button variant="primary" size="lg" icon="round" aria-label={isPlaying ? "Pause" : "Play"}
         onClick={() => transport?.playPause()}
         disabled={!transport}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-40"
         title={isPlaying ? "Pause" : "Play"}
       >
         {isPlaying ? "⏸" : "▶"}
-      </button>
+      </Button>
 
       <span className="tabular-nums text-sm text-muted">
         {formatTime(currentTime)} / {formatTime(duration)}
@@ -63,13 +63,12 @@ export function Transport() {
       <div className="ml-auto flex items-center gap-2">
         {dirty && <span className="text-xs text-warning">Unsaved changes</span>}
         <span className="truncate text-sm text-faint">{title}</span>
-        <button
+        <Button
           onClick={() => void saveSong()}
           disabled={!dirty || saving}
-          className="rounded bg-raised px-3 py-1 text-sm text-fg disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

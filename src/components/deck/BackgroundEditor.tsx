@@ -5,6 +5,7 @@ import type { Background, Deck } from "../../schema/deck.js";
 type ImageBackground = Extract<Background, { kind: "image" }>;
 import { useDeckStore } from "../../store/deckStore.js";
 import { useDeckAssets } from "./useDeckAssets.js";
+import { Button, Field } from "../controls.js";
 
 /**
  * Color-or-saved-image backdrop picker, shared by the deck theme (master) and
@@ -76,35 +77,29 @@ export function BackgroundEditor({
   return (
     <div className="space-y-2">
       <div className="flex gap-1">
-        <button
+        <Button size="sm" className="flex-1" pressed={!isImage}
           onClick={() => onChange({ kind: "color", color: fallbackColor })}
-          className={`flex-1 rounded px-2 py-1 text-[11px] ${
-            !isImage ? "bg-accent text-accent-fg" : "bg-raised text-muted"
-          }`}
         >
           Color
-        </button>
-        <button
+        </Button>
+        <Button size="sm" className="flex-1" pressed={isImage}
           onClick={() => {
             // Nothing saved yet — go straight to the file picker rather than
             // switching into an image mode with no image to show.
             if (saved.length === 0) fileInput.current?.click();
             else if (!isImage) onChange({ kind: "image", src: saved[0]!, fit: "cover", dim: 0 });
           }}
-          className={`flex-1 rounded px-2 py-1 text-[11px] ${
-            isImage ? "bg-accent text-accent-fg" : "bg-raised text-muted"
-          }`}
         >
           Image
-        </button>
+        </Button>
       </div>
 
       {!isImage && (
-        <input
+        <Field
           type="color"
           value={value.color}
           onChange={(e) => onChange({ kind: "color", color: e.target.value })}
-          className="h-8 w-full rounded border border-line bg-canvas"
+          className="w-full"
         />
       )}
 
@@ -118,11 +113,9 @@ export function BackgroundEditor({
                   <button
                     key={src}
                     title={src}
+                    aria-pressed={value.src === src}
                     aria-label={`Saved image ${src.split("/").pop()}`}
-                    onClick={() => onChange({ ...value, src })}
-                    className={`aspect-video overflow-hidden rounded border-2 bg-canvas ${
-                      value.src === src ? "border-accent" : "border-line hover:border-faint"
-                    }`}
+                    onClick={() => onChange({ ...value, src })} className="tile aspect-video overflow-hidden"
                   >
                     {thumbs[src] ? (
                       <img src={thumbs[src]} alt="" className="h-full w-full object-cover" />
@@ -137,16 +130,18 @@ export function BackgroundEditor({
 
           <label className={label}>
             Fit
-            <select
+            <Field
+              as="select"
+              size="sm"
               value={value.fit}
               onChange={(e) => onChange({ ...value, fit: e.target.value as ImageBackground["fit"] })}
-              className="mt-0.5 w-full rounded border border-line bg-canvas px-2 py-1 text-xs text-fg"
+              className="mt-0.5 w-full"
             >
               <option value="cover">Cover — fill, cropping overflow</option>
               <option value="contain">Contain — fit whole image</option>
               <option value="fill">Stretch to fill</option>
               <option value="tile">Tile</option>
-            </select>
+            </Field>
           </label>
 
           <label className={label}>
@@ -166,20 +161,18 @@ export function BackgroundEditor({
       )}
 
       <div className="flex gap-1">
-        <button
+        <Button size="sm" className="flex-1"
           onClick={() => fileInput.current?.click()}
           disabled={busy}
-          className="flex-1 rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover disabled:opacity-40"
         >
           {busy ? "Saving…" : "Upload image…"}
-        </button>
+        </Button>
         {onInherit && (
-          <button
+          <Button size="sm" className="flex-1"
             onClick={onInherit}
-            className="flex-1 rounded bg-raised px-2 py-1 text-[11px] text-muted hover:bg-raised-hover"
           >
             {inheritLabel ?? "Use theme"}
-          </button>
+          </Button>
         )}
       </div>
 
