@@ -31,10 +31,10 @@ export function sameSong(candidate: TabCandidate, song: SongIdentity) {
 export function siteUrl(value: string): string {
   let url: URL;
   try { url = new URL(value, "https://www.ultimate-guitar.com"); }
-  catch { throw new AgentError("invalid_url", "כתובת המקור אינה תקינה."); }
+  catch { throw new AgentError("invalid_url", "The source address is not valid."); }
   if (url.protocol !== "https:" || !["www.ultimate-guitar.com", "tabs.ultimate-guitar.com"].includes(url.hostname)
       || url.username || url.password || url.port) {
-    throw new AgentError("invalid_url", "הסוכן יכול לפתוח רק עמודים של Ultimate Guitar.");
+    throw new AgentError("invalid_url", "The agent can only open Ultimate Guitar pages.");
   }
   return url.href;
 }
@@ -56,11 +56,11 @@ export function tabCandidate(raw: unknown): TabCandidate | null {
 // Reads candidate versions and pagination. Missing structure raises an error rather than implying that no Official version exists.
 export function searchPage(state: unknown) {
   const data = record(pageData(state));
-  if (!Array.isArray(data.results)) throw new AgentError("site_changed", "מבנה תוצאות החיפוש לא זוהה; אי אפשר להסיק שאין גרסה רשמית.");
+  if (!Array.isArray(data.results)) throw new AgentError("site_changed", "The search results could not be read, so this does not show that no official version exists.");
   const pagination = record(data.pagination);
   const total = count(pagination.total);
   const current = count(pagination.current);
-  if (total === null || current === null || current < 1) throw new AgentError("site_changed", "לא ניתן לאמת את מספר עמודי החיפוש.");
+  if (total === null || current === null || current < 1) throw new AgentError("site_changed", "The number of search result pages could not be verified.");
   return { candidates: data.results.map(tabCandidate).filter((t): t is TabCandidate => t !== null), total, current };
 }
 // Prefers a single Official version; otherwise selects by view count. Multiple Official versions, ties, or missing counts require a manual choice.
@@ -68,12 +68,12 @@ export function selectCandidate(candidates: TabCandidate[]):
   { selected: TabCandidate; reason: "official" | "most_viewed" } | { choices: TabCandidate[]; message: string } {
   const official = candidates.filter(c => c.official);
   if (official.length === 1) return { selected: official[0]!, reason: "official" };
-  if (official.length > 1) return { choices: official, message: "נמצאו כמה גרסאות רשמיות. בחר את הגרסה הרצויה." };
-  if (!candidates.length) throw new AgentError("not_found", "לא נמצאו גרסאות אקורדים תואמות באתר.");
-  if (candidates.some(c => c.views === null)) return { choices: candidates, message: "אין נתון צפיות מלא לכל הגרסאות. לא ניתן לקבוע איזו נצפתה הכי הרבה; בחר גרסה ידנית." };
+  if (official.length > 1) return { choices: official, message: "Several official versions were found. Choose the one you want." };
+  if (!candidates.length) throw new AgentError("not_found", "No matching chord versions were found on the site.");
+  if (candidates.some(c => c.views === null)) return { choices: candidates, message: "View counts are missing for some versions, so the most viewed one can't be determined. Choose a version yourself." };
   const max = Math.max(...candidates.map(c => c.views!));
   const top = candidates.filter(c => c.views === max);
-  if (top.length !== 1) return { choices: top, message: "כמה גרסאות חולקות את מספר הצפיות הגבוה ביותר. בחר גרסה." };
+  if (top.length !== 1) return { choices: top, message: "Several versions share the highest view count. Choose one." };
   return { selected: top[0]!, reason: "most_viewed" };
 }
 
@@ -101,7 +101,7 @@ export function parseChordContent(content: string) {
       continue;
     }
     const chords = matches.map(m => m[1]!.trim());
-    if (chords.some(c => !c || c.length > 40)) throw new AgentError("invalid_content", "נמצאו סימוני אקורדים לא תקינים.");
+    if (chords.some(c => !c || c.length > 40)) throw new AgentError("invalid_content", "Invalid chord markings were found.");
     // Rebuild the chord row with each chord at its original column; words between chords become
     // spaces here (they are kept separately as the line's lyric), so alignment survives.
     let cursor = 0;
@@ -120,7 +120,7 @@ export function parseChordContent(content: string) {
     if (lyric) chart.push(lyric);
     waiting = lyric === null ? entry : null;
   }
-  if (!lines.length) throw new AgentError("unsupported_content", "לא נמצאו סימוני אקורדים נגישים בגרסה. הסוכן לא ינחש אקורדים מתוך תווים או אודיו.");
+  if (!lines.length) throw new AgentError("unsupported_content", "No readable chord markings were found in this version. The agent will not guess chords from tablature or audio.");
   return { lines, uniqueChords: [...new Set(lines.flatMap(l => l.chords))], chart: chart.join("\n") };
 }
 
@@ -130,10 +130,10 @@ export function readTab(state: unknown, expected: TabCandidate) {
   const tab = record(data.tab);
   const actual = tabCandidate(tab);
   const view = record(data.tab_view);
-  if (!actual) throw new AgentError("needs_login", "עמוד התווים אינו נגיש. השלם התחברות בדפדפן ובדוק שהמנוי מאפשר לפתוח את הגרסה.");
+  if (!actual) throw new AgentError("needs_login", "The tab page can't be opened. Finish logging in in the browser, and check that your subscription allows this version.");
   if (actual.id !== expected.id || !sameSong(actual, expected) || actual.official !== expected.official)
-    throw new AgentError("source_mismatch", "העמוד שנפתח אינו הגרסה שנבחרה; החילוץ נעצר.");
+    throw new AgentError("source_mismatch", "The page that opened is not the version that was chosen, so extraction stopped.");
   if (view.blocked === true || view.blocked === 1 || view.adsupp_binary_blocked === true)
-    throw new AgentError("access_denied", "האתר אינו מאפשר גישה לתוכן הגרסה בחיבור הנוכחי.");
+    throw new AgentError("access_denied", "The site does not allow access to this version's content on the current connection.");
   return { data, tab, view, candidate: { ...actual, views: count(record(view.stats).view_total) } };
 }
