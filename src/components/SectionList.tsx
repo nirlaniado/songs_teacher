@@ -1,6 +1,8 @@
 import { useLibraryStore } from "../store/libraryStore.js";
 import { usePlayerStore } from "../store/playerStore.js";
 import { SectionType, type Section } from "../schema/song.js";
+import { Button, Field } from "./controls.js";
+import { Icon } from "./icons.js";
 
 const TYPES = SectionType.options;
 
@@ -19,7 +21,7 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
 
   return (
     <li
-      className={`rounded-md border p-2 ${
+      className={`rounded-surface border p-2 ${
         active ? "border-accent bg-accent-soft" : "border-line bg-panel"
       }`}
     >
@@ -37,54 +39,58 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
         <span className="text-[11px] tabular-nums text-faint">
           {formatTime(section.start)}–{formatTime(section.end)}
         </span>
-        <button
+        <Button variant="destructive-subtle" size="sm" icon aria-label={`Delete ${section.name}`}
           onClick={() => {
             if (confirm(`Delete "${section.name}"?`)) removeSection(section.id);
           }}
-          className="text-xs text-faint hover:text-danger"
         >
-          ✕
-        </button>
+          <Icon name="close" />
+        </Button>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input
+        <Field
+          size="sm"
           value={section.name}
           onChange={(e) => updateSection(section.id, (s) => ({ ...s, name: e.target.value }))}
           placeholder="Name"
-          className="w-32 rounded border border-line bg-canvas px-2 py-1 text-xs"
+          className="w-32"
         />
-        <select
+        <Field
+          as="select"
+          size="sm"
           value={section.type}
           onChange={(e) =>
             updateSection(section.id, (s) => ({ ...s, type: e.target.value as Section["type"] }))
           }
-          className="rounded border border-line bg-canvas px-2 py-1 text-xs"
         >
           {TYPES.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
-        </select>
+        </Field>
       </div>
 
       <label className="mt-2 block text-[11px] text-faint">
         Progression (chords, space-separated — the graph's only harmonic input)
-        <input
+        <Field
+          size="sm"
           defaultValue={section.progression.join(" ")}
           onBlur={(e) => {
             const progression = e.target.value.trim().split(/\s+/).filter(Boolean);
             updateSection(section.id, (s) => ({ ...s, progression }));
           }}
           placeholder="C G Am F"
-          className="mt-1 block w-full rounded border border-line bg-canvas px-2 py-1 text-xs"
+          className="mt-1 w-full"
         />
       </label>
 
       <label className="mt-2 block text-[11px] text-faint">
         Notes
-        <textarea
+        <Field
+          as="textarea"
+          size="sm"
           defaultValue={section.notes ?? ""}
           onBlur={(e) =>
             updateSection(section.id, (s) => ({
@@ -94,7 +100,7 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
           }
           rows={2}
           placeholder="Observations, markdown…"
-          className="mt-1 block w-full resize-y rounded border border-line bg-canvas px-2 py-1 text-xs"
+          className="mt-1 w-full resize-y"
         />
       </label>
     </li>

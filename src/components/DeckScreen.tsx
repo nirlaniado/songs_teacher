@@ -7,6 +7,8 @@ import { SlideCanvas } from "./deck/SlideCanvas.js";
 import { SlidePanel } from "./deck/SlidePanel.js";
 import { TimingPanel } from "./deck/TimingPanel.js";
 import { useFullscreen } from "./deck/useFullscreen.js";
+import { Button } from "./controls.js";
+import { Icon } from "./icons.js";
 
 /**
  * The editor window: slide rail, canvas, properties sidebar, and the music
@@ -125,33 +127,27 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
     onBack();
   }
 
-  const chip = (on: boolean) =>
-    `rounded px-2 py-0.5 text-xs ${
-      on ? "bg-raised text-fg" : "text-faint hover:text-muted"
-    }`;
-
   return (
     <div ref={rootRef} className="flex h-screen flex-col bg-canvas">
       {/* App chrome. Hidden in focus mode — its whole job is getting out of
           the way of the canvas. */}
       {!focus && (
         <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-1">
-          <button onClick={handleBack} className="text-xs text-faint hover:text-muted">
+          <Button variant="subtle" size="sm" onClick={handleBack}>
             ← Presentations
-          </button>
+          </Button>
           <span className="ml-auto text-[11px] text-faint">
             Double-click text to edit · Del removes · arrows nudge
           </span>
-          <button onClick={() => setShowTiming((v) => !v)} className={chip(showTiming)}>
-            ♪ Music sync
-          </button>
-          <button
+          <Button variant="subtle" size="sm" pressed={showTiming} onClick={() => setShowTiming((v) => !v)}>
+            <Icon name="music" /> Music sync
+          </Button>
+          <Button variant="subtle" size="sm"
             onClick={enterFocus}
             title="Edit full screen, without the music panel (Ctrl+Shift+F)"
-            className={chip(false)}
           >
-            ⛶ Focus
-          </button>
+            <Icon name="focus" /> Focus
+          </Button>
         </div>
       )}
 
@@ -163,22 +159,21 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
         <div className="flex items-center gap-2 border-b border-line bg-panel px-3 py-0.5">
           <span className="text-[11px] text-faint">Focus — editing full screen</span>
           <div className="ml-auto flex items-center gap-1">
-            <button onClick={() => setShowRail((v) => !v)} className={chip(showRail)}>
+            <Button variant="subtle" size="sm" pressed={showRail} onClick={() => setShowRail((v) => !v)}>
               Slides
-            </button>
-            <button onClick={() => setShowProperties((v) => !v)} className={chip(showProperties)}>
+            </Button>
+            <Button variant="subtle" size="sm" pressed={showProperties} onClick={() => setShowProperties((v) => !v)}>
               Properties
-            </button>
-            <button onClick={() => setShowTiming((v) => !v)} className={chip(showTiming)}>
-              ♪ Music sync
-            </button>
-            <button
+            </Button>
+            <Button variant="subtle" size="sm" pressed={showTiming} onClick={() => setShowTiming((v) => !v)}>
+              <Icon name="music" /> Music sync
+            </Button>
+            <Button size="sm"
               onClick={leaveFocus}
               title="Leave focus mode (Ctrl+Shift+F, or Esc while full screen)"
-              className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
             >
-              ⤡ Exit focus
-            </button>
+              <Icon name="exitFocus" /> Exit focus
+            </Button>
           </div>
         </div>
       )}
@@ -192,7 +187,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <SlideCanvas />
           {showTiming && (
-            <div className="h-64 flex-shrink-0">
+            <div className="panel-rise h-64 flex-shrink-0">
               <TimingPanel />
             </div>
           )}

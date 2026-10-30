@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { SLIDE_H, SLIDE_W, type ShapeKind } from "../../schema/deck.js";
 import { TUNING_PRESETS, tabScaffold } from "../../deck/templates.js";
 import { centeredFrame, useDeckStore } from "../../store/deckStore.js";
+import { Button, Field } from "../controls.js";
+import { Icon, type IconName } from "../icons.js";
 
 /**
  * Insert bar + arrange/align + view controls + undo/redo + save + present.
@@ -22,13 +24,13 @@ const SHAPES: Array<{ shape: ShapeKind; label: string }> = [
   { shape: "arrow", label: "Arrow" },
 ];
 
-const ALIGNMENTS: Array<{ mode: "left" | "center" | "right" | "top" | "middle" | "bottom"; glyph: string; label: string }> = [
-  { mode: "left", glyph: "⬅", label: "Align left" },
-  { mode: "center", glyph: "↔", label: "Centre horizontally" },
-  { mode: "right", glyph: "➡", label: "Align right" },
-  { mode: "top", glyph: "⬆", label: "Align top" },
-  { mode: "middle", glyph: "↕", label: "Centre vertically" },
-  { mode: "bottom", glyph: "⬇", label: "Align bottom" },
+const ALIGNMENTS: Array<{ mode: "left" | "center" | "right" | "top" | "middle" | "bottom"; icon: IconName; label: string }> = [
+  { mode: "left", icon: "alignLeft", label: "Align left" },
+  { mode: "center", icon: "alignCentre", label: "Centre horizontally" },
+  { mode: "right", icon: "alignRight", label: "Align right" },
+  { mode: "top", icon: "alignTop", label: "Align top" },
+  { mode: "middle", icon: "alignMiddle", label: "Centre vertically" },
+  { mode: "bottom", icon: "alignBottom", label: "Align bottom" },
 ];
 
 /**
@@ -128,23 +130,19 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
     });
   }
 
-  const btn =
-    "rounded px-2 py-1 text-xs text-fg hover:bg-raised-hover disabled:opacity-35 disabled:hover:bg-transparent";
-
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-line bg-panel px-3 py-1.5">
-      <input
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-line bg-panel px-3 py-1.5">
+      <Field
         value={deck?.title ?? ""}
         onChange={(e) => setTitle(e.target.value)}
-        className="mr-2 w-52 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium text-fg hover:border-line focus:border-faint focus:outline-none"
+        className="mr-1 w-40 border-transparent bg-transparent font-medium hover:border-line"
         placeholder="Untitled presentation"
         aria-label="Presentation title"
       />
 
-      <span className="mx-1 h-4 w-px bg-raised" />
+      <span className="mx-1 h-4 w-px bg-line" />
 
-      <button
-        className={btn}
+      <Button variant="subtle"
         onClick={() =>
           addElement({
             kind: "text",
@@ -164,24 +162,25 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         }
       >
         + Text
-      </button>
-      <button className={btn} onClick={() => imageInput.current?.click()}>
+      </Button>
+      <Button variant="subtle" onClick={() => imageInput.current?.click()}>
         + Image
-      </button>
+      </Button>
       {/* Tuning picker — same dropdown pattern as shapes below. Picking one
           inserts a labelled, dash-filled scaffold in that tuning; "Standard"
           is first so a plain click-through gives the common case. */}
       <div className="relative">
-        <button
-          className={btn}
+        <Button variant="subtle"
           title="Guitar/bass tab — starts as a blank six-string scaffold, extend and edit freely"
+          aria-haspopup="menu"
+          aria-expanded={tuningMenu}
           onClick={() => setTuningMenu((v) => !v)}
         >
-          + Tab ▾
-        </button>
+          + Tab <Icon name="chevronDown" />
+        </Button>
         {tuningMenu && (
           <div
-            className="absolute left-0 top-full z-40 mt-1 w-56 rounded border border-line bg-panel py-1 shadow-xl"
+            className="pop absolute left-0 top-full z-40 mt-1 w-56 rounded-surface border border-line bg-panel p-1 shadow-xl"
             onMouseLeave={() => setTuningMenu(false)}
           >
             {TUNING_PRESETS.map(({ id, label }) => (
@@ -190,8 +189,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
                 onClick={() => {
                   setTuningMenu(false);
                   insertTab(id);
-                }}
-                className="block w-full px-3 py-1 text-left text-[11px] text-fg hover:bg-raised"
+                }} className="menu-item"
               >
                 {label}
               </button>
@@ -212,12 +210,12 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
       />
       {/* Shape picker — Impress puts its shapes behind one dropdown too. */}
       <div className="relative">
-        <button className={btn} onClick={() => setShapeMenu((v) => !v)}>
-          + Shape ▾
-        </button>
+        <Button variant="subtle" aria-haspopup="menu" aria-expanded={shapeMenu} onClick={() => setShapeMenu((v) => !v)}>
+          + Shape <Icon name="chevronDown" />
+        </Button>
         {shapeMenu && (
           <div
-            className="absolute left-0 top-full z-40 mt-1 w-40 rounded border border-line bg-panel py-1 shadow-xl"
+            className="pop absolute left-0 top-full z-40 mt-1 w-40 rounded-surface border border-line bg-panel p-1 shadow-xl"
             onMouseLeave={() => setShapeMenu(false)}
           >
             {SHAPES.map(({ shape, label }) => (
@@ -226,8 +224,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
                 onClick={() => {
                   setShapeMenu(false);
                   addElement(newShape(shape));
-                }}
-                className="block w-full px-3 py-1 text-left text-[11px] text-fg hover:bg-raised"
+                }} className="menu-item"
               >
                 {label}
               </button>
@@ -236,113 +233,105 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         )}
       </div>
 
-      <span className="mx-1 h-4 w-px bg-raised" />
+      <span className="mx-1 h-4 w-px bg-line" />
 
       {/* Arrange — Impress's Shape ▸ Arrange, on the selection. */}
-      <button
-        className={btn}
+      <Button variant="subtle" icon
         disabled={!hasSelection}
         onClick={() => arrangeSelection("front")}
         title="Bring to front (Ctrl+Shift+Home)"
         aria-label="Bring to front"
       >
-        ⤒
-      </button>
-      <button
-        className={btn}
+        <Icon name="toFront" />
+      </Button>
+      <Button variant="subtle" icon
         disabled={!hasSelection}
         onClick={() => arrangeSelection("forward")}
         title="Bring forward (Ctrl+Shift+↑)"
         aria-label="Bring forward"
       >
-        ↑
-      </button>
-      <button
-        className={btn}
+        <Icon name="forward" />
+      </Button>
+      <Button variant="subtle" icon
         disabled={!hasSelection}
         onClick={() => arrangeSelection("backward")}
         title="Send backward (Ctrl+Shift+↓)"
         aria-label="Send backward"
       >
-        ↓
-      </button>
-      <button
-        className={btn}
+        <Icon name="backward" />
+      </Button>
+      <Button variant="subtle" icon
         disabled={!hasSelection}
         onClick={() => arrangeSelection("back")}
         title="Send to back (Ctrl+Shift+End)"
         aria-label="Send to back"
       >
-        ⤓
-      </button>
+        <Icon name="toBack" />
+      </Button>
 
-      <span className="mx-1 h-4 w-px bg-raised" />
+      <span className="mx-1 h-4 w-px bg-line" />
 
       {/* Align. One element aligns to the slide, several to each other. */}
-      {ALIGNMENTS.map(({ mode, glyph, label }) => (
-        <button
+      {ALIGNMENTS.map(({ mode, icon, label }) => (
+        <Button variant="subtle" icon
           key={mode}
-          className={btn}
           disabled={!hasSelection}
           onClick={() => alignSelection(mode)}
           title={selectionCount > 1 ? `${label} (within the selection)` : `${label} (on the slide)`}
           aria-label={label}
         >
-          {glyph}
-        </button>
+          <Icon name={icon} />
+        </Button>
       ))}
-      <button
-        className={btn}
+      <Button variant="subtle" icon
         disabled={selectionCount < 3}
         onClick={() => distributeSelection("horizontal")}
         title="Distribute horizontally — needs three or more"
         aria-label="Distribute horizontally"
       >
-        ⇹
-      </button>
-      <button
-        className={btn}
+        <Icon name="distributeH" />
+      </Button>
+      <Button variant="subtle" icon
         disabled={selectionCount < 3}
         onClick={() => distributeSelection("vertical")}
         title="Distribute vertically — needs three or more"
         aria-label="Distribute vertically"
       >
-        ⇳
-      </button>
-      <button
-        className={btn}
+        <Icon name="distributeV" />
+      </Button>
+      <Button variant="subtle" icon
         disabled={!hasSelection}
         onClick={duplicateSelection}
         title="Duplicate (Ctrl+D)"
         aria-label="Duplicate"
       >
-        ⧉
-      </button>
+        <Icon name="duplicate" />
+      </Button>
 
-      <span className="mx-1 h-4 w-px bg-raised" />
+      <span className="mx-1 h-4 w-px bg-line" />
 
       {/* View — grid, snapping and zoom. */}
-      <button
-        className={`${btn} ${showGrid ? "bg-raised-hover" : ""}`}
+      <Button variant="subtle" icon pressed={showGrid}
         onClick={toggleGrid}
         title="Show grid"
         aria-label="Show grid"
       >
-        ▦
-      </button>
-      <button
-        className={`${btn} ${snapEnabled ? "bg-raised-hover" : ""}`}
+        <Icon name="grid" />
+      </Button>
+      <Button variant="subtle" icon pressed={snapEnabled}
         onClick={toggleSnap}
         title="Snap to guides — hold Alt while dragging to suspend"
         aria-label="Snap to guides"
       >
-        🧲
-      </button>
-      <select
+        <Icon name="magnet" />
+      </Button>
+      <Field
+        as="select"
+        className="w-[4.25rem]"
         value={zoom === "fit" ? "fit" : String(zoom)}
         onChange={(e) => setZoom(e.target.value === "fit" ? "fit" : Number(e.target.value))}
         title="Zoom"
-        className="rounded border border-line bg-canvas px-1.5 py-1 text-[11px] text-fg"
+        aria-label="Zoom"
       >
         <option value="fit">Fit</option>
         {ZOOM_STEPS.map((step) => (
@@ -350,27 +339,26 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
             {Math.round(step * 100)}%
           </option>
         ))}
-      </select>
+      </Field>
 
-      <span className="mx-1 h-4 w-px bg-raised" />
+      <span className="mx-1 h-4 w-px bg-line" />
 
-      <button className={btn} onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
-        ↶
-      </button>
-      <button className={btn} onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-        ↷
-      </button>
+      <Button variant="subtle" icon onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+        <Icon name="undo" />
+      </Button>
+      <Button variant="subtle" icon onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+        <Icon name="redo" />
+      </Button>
 
       <div className="ml-auto flex items-center gap-2">
         {dirty && <span className="text-[11px] text-warning">Unsaved</span>}
-        <button
+        <Button
           onClick={() => void saveDeck()}
           disabled={!dirty || saving}
-          className="rounded bg-raised px-2.5 py-1 text-xs text-fg disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save"}
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => void download()}
           disabled={!deck || exporting}
           title={
@@ -378,17 +366,15 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
               ? "Download as a .zip — you'll be asked whether to include the stems"
               : "Download the presentation and its media as a .zip"
           }
-          className="rounded bg-raised px-2.5 py-1 text-xs text-fg disabled:opacity-40"
         >
-          {exporting ? "Packing…" : "⭳ Download"}
-        </button>
-        <button
+          {exporting ? "Packing…" : <><Icon name="download" /> Download</>}
+        </Button>
+        <Button variant="primary"
           onClick={onPresent}
           disabled={!deck || deck.slides.length === 0}
-          className="rounded bg-accent px-3 py-1 text-xs font-medium text-accent-fg disabled:opacity-40"
         >
-          ▶ Present
-        </button>
+          <Icon name="play" /> Present
+        </Button>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useDeckStore } from "../store/deckStore.js";
+import { Button, Field } from "./controls.js";
 
 /**
  * The start screen — the list of presentations, plus "new". Roughly the role
@@ -60,20 +61,20 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
             moment in the song.
           </p>
         </div>
-        <button onClick={() => void detach()} className="text-sm text-faint hover:text-muted">
+        <Button variant="subtle" onClick={() => void detach()}>
           Close library
-        </button>
+        </Button>
       </div>
 
       {usingFallbackStorage && (
-        <p className="mb-4 rounded border border-line bg-panel px-3 py-2 text-xs text-faint">
+        <p className="mb-4 rounded-control border border-line bg-panel px-3 py-2 text-xs text-faint">
           This browser can't open a real folder, so presentations are stored inside the browser.
           Clearing site data will delete them. Chrome, Edge, or Brave keep them as files on disk.
         </p>
       )}
 
       {error && (
-        <p className="mb-4 rounded border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
+        <p className="mb-4 rounded-control border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
           {error}
         </p>
       )}
@@ -85,28 +86,27 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
         }}
         className="mb-8 flex gap-2"
       >
-        <input
+        <Field
+          size="lg"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="New presentation title"
-          className="flex-1 rounded border border-line bg-canvas px-3 py-2 text-sm text-fg"
+          className="flex-1"
         />
-        <button
+        <Button variant="primary" size="lg"
           type="submit"
           disabled={creating}
-          className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-fg disabled:opacity-50"
         >
           {creating ? "Creating…" : "Create"}
-        </button>
-        <button
+        </Button>
+        <Button size="lg"
           type="button"
           onClick={() => bundleInput.current?.click()}
           disabled={importing}
           title="Open a .zip exported from songs-teacher"
-          className="rounded bg-raised px-4 py-2 text-sm text-fg hover:bg-raised-hover disabled:opacity-50"
         >
           {importing ? "Importing…" : "Import…"}
-        </button>
+        </Button>
         <input
           ref={bundleInput}
           type="file"
@@ -122,14 +122,14 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
 
       {loading && <p className="text-sm text-faint">Loading…</p>}
       {!loading && decks.length === 0 && (
-        <p className="rounded-lg border border-dashed border-line px-4 py-10 text-center text-sm text-faint">
+        <p className="rounded-surface border border-dashed border-line px-4 py-10 text-center text-sm text-faint">
           No presentations yet. Name one above and hit Create.
         </p>
       )}
 
-      <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+      <ul className="divide-y divide-line overflow-hidden rounded-surface border border-line">
         {decks.map((deck) => (
-          <li key={deck.id} className="flex items-center gap-3 px-4 py-3 hover:bg-panel">
+          <li key={deck.id} className="row flex items-center gap-3 px-4 py-3">
             <button onClick={() => void open(deck.id)} className="flex-1 text-left">
               <div className="font-medium text-fg">{deck.title}</div>
               <div className="text-xs text-faint">
@@ -137,16 +137,15 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
                 {deck.hasAudio && <span className="ml-2 text-accent-light">♪ has audio</span>}
               </div>
             </button>
-            <button
+            <Button variant="destructive-subtle" size="sm"
               onClick={() => {
                 if (confirm(`Delete "${deck.title}"? This cannot be undone.`)) {
                   void deleteDeck(deck.id);
                 }
               }}
-              className="text-xs text-faint hover:text-danger"
             >
               Delete
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

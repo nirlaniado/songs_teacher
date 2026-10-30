@@ -6,6 +6,8 @@ import { useDeckStore } from "../../store/deckStore.js";
 import { AutoSuggestCues } from "./AutoSuggestCues.js";
 import { SeparateStems } from "./SeparateStems.js";
 import { StemMixer } from "./StemMixer.js";
+import { Button, Field } from "../controls.js";
+import { Icon } from "../icons.js";
 
 /**
  * The music-sync panel: attach an MP3, then give each slide a cue time so the
@@ -105,37 +107,34 @@ export function TimingPanel() {
 
         {deck.audio ? (
           <>
-            <button
+            <Button variant="primary" size="sm" icon="round"
               onClick={player.toggle}
               disabled={!player.available}
               aria-label={playing ? "Pause" : "Play"}
-              className="rounded bg-accent px-2 py-0.5 text-xs text-accent-fg disabled:opacity-40"
             >
-              {playing ? "⏸" : "▶"}
-            </button>
+              <Icon name={playing ? "pause" : "play"} />
+            </Button>
             <span className="tabular-nums text-xs text-muted">
               {formatCue(time)} / {duration ? formatCue(duration) : "—"}
             </span>
             <span className="truncate text-[11px] text-faint">
               {deck.audio.originalName ?? deck.audio.path}
             </span>
-            <button
+            <Button variant="destructive-subtle" size="sm" className="ml-auto"
               onClick={() => {
                 if (confirm("Remove the audio track? Cue times are kept.")) void removeAudio();
               }}
-              className="ml-auto text-[11px] text-faint hover:text-danger"
             >
               Remove audio
-            </button>
+            </Button>
           </>
         ) : (
           <>
-            <button
+            <Button size="sm"
               onClick={() => fileInput.current?.click()}
-              className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
             >
               Add MP3
-            </button>
+            </Button>
             <span className="text-[11px] text-faint">
               Attach a track, then cue each slide to a moment in the song.
             </span>
@@ -157,7 +156,7 @@ export function TimingPanel() {
       {/* Timeline strip: cue marks over the song, click to scrub. */}
       {deck.audio && (
         <div
-          className="relative mx-3 mt-2 h-6 cursor-pointer rounded bg-raised"
+          className="relative mx-3 mt-2 h-6 cursor-pointer rounded-control bg-raised"
           onClick={(e) => {
             if (!duration) return;
             const rect = e.currentTarget.getBoundingClientRect();
@@ -167,8 +166,8 @@ export function TimingPanel() {
           {duration > 0 &&
             cues.map((cue) => (
               <div
-                key={cue.index}
-                className="absolute top-0 h-full w-0.5 bg-accent"
+                key={`${cue.index}:${cue.time}`}
+                className="cue-mark absolute top-0 h-full w-0.5 bg-accent"
                 style={{ left: `${(cue.time / duration) * 100}%` }}
                 title={`Slide ${cue.index + 1} @ ${formatCue(cue.time)}`}
               />
@@ -227,7 +226,9 @@ export function TimingPanel() {
                     )}
                   </td>
                   <td className="py-1">
-                    <input
+                    <Field
+                      size="sm"
+                      invalid={bad}
                       value={drafts[slide.id] ?? (slide.startTime !== undefined ? formatCue(slide.startTime) : "")}
                       placeholder={CUE_PLACEHOLDER}
                       aria-label={`Cue time for ${slide.name}`}
@@ -236,29 +237,25 @@ export function TimingPanel() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       }}
-                      className={`w-20 rounded border bg-canvas px-1.5 py-0.5 tabular-nums placeholder:text-faint ${
-                        bad ? "border-warning text-warning" : "border-line text-fg"
-                      }`}
+                      className="w-20 tabular-nums"
                     />
                   </td>
                   <td className="py-1">
-                    <button
+                    <Button size="sm" className="tabular-nums"
                       onClick={() => setSlideCue(i, Math.round(time * 10) / 10)}
                       disabled={!deck.audio}
                       title="Cue this slide at the current playhead"
-                      className="rounded bg-raised px-1.5 py-0.5 text-[10px] text-muted hover:bg-raised-hover disabled:opacity-30"
                     >
                       Set {deck.audio ? formatCue(time) : ""}
-                    </button>
+                    </Button>
                     {slide.startTime !== undefined && (
-                      <button
+                      <Button variant="destructive-subtle" size="sm" icon className="ml-1"
                         onClick={() => setSlideCue(i, undefined)}
                         title="Clear cue"
                         aria-label={`Clear cue for ${slide.name}`}
-                        className="ml-1 text-[10px] text-faint hover:text-danger"
                       >
-                        ✕
-                      </button>
+                        <Icon name="close" />
+                      </Button>
                     )}
                   </td>
                 </tr>

@@ -54,7 +54,7 @@ strings, so the cost has no matching benefit.
 
 ## Architecture
 
-Five load-bearing ideas. Everything else is detail.
+Six load-bearing ideas. Everything else is detail.
 
 ### 1. One renderer at three scales
 
@@ -209,6 +209,39 @@ locked). Two things about it are deliberately narrower than `text`:
   rotated and the canvas zoomed, and an overlay outside that transform is what stays a
   legible, constant size regardless.
 
+### 6. Controls are decided once
+
+`Button` and `Field` (`components/controls.tsx`) are the app's buttons and inputs, and all
+they do is pick class names. Every visual decision — shape, size, state, motion — sits
+under those names in `src/index.css`. Menu rows and picker tiles aren't buttons in that
+sense, but they live there too, as `.menu-item` and `.tile`.
+
+*Why:* the app reached 109 buttons, each an ad-hoc class string, so nothing had ever been
+decided: one button at three sizes, no focus state, no motion. A design pass meant editing
+every call site. Now it edits one file, and a new screen inherits the decisions instead of
+re-guessing them. A call site's `className` should be layout; a look that recurs is a
+decision missing from `index.css`.
+
+- **The thumbnail rail deliberately does not use `Button`.** It is the one button that
+  wraps a `SlideRenderer`. A press transform there would scale the slide, and the control's
+  type styles would inherit into anything the slide doesn't set itself — control styling
+  reaching slide content, which is exactly what hard rule 0 exists to prevent. `.slide-thumb`
+  is a selection ring and nothing else, and has to stay that way.
+- **Hover and lit states are opacity layers, not colour transitions.** Transitions stay on
+  `transform` and `opacity` so they never repaint per frame, and a colour transition would
+  also need a from/to pair for every variant. One wash layer fading over the fill works on
+  all of them. The cost, accepted, is that a label's own colour snaps.
+- **Reduced motion keeps the fades and drops travel and press.** Movement is what causes
+  discomfort, while a fade is what says a menu opened or a key went lit; removing it would
+  make the app harder to read, not gentler. Every press and travel reads a token so the
+  override is one block — and a new animation that hardcodes its distance escapes it.
+- **A field lights its own edge on `:focus`; don't "fix" that to `:focus-visible`.**
+  Browsers match both on a text field even after a click, because a caret needs showing,
+  so the keyboard-only ring would appear on every click.
+- **The global focus ring has no weight and no `!important`, on purpose.** That is why the
+  inline editor's inline `outline: none` still wins. Strengthen it and a ring lands on the
+  editing surface.
+
 ---
 
 ## Tech choices and their trade-offs
@@ -293,7 +326,7 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 365 tests
+npm test           # vitest — 439 tests
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build
 ```
@@ -428,6 +461,14 @@ Break these and the design stops working. Each was argued through, not defaulted
   every graph edge derived from that section.
 - **Don't put `currentTime` in React state**, and don't use `timeupdate` (see the stack
   table).
+- **The usual checks can't see what paints over a slide.** A thumbnail overhangs its button
+  by a few pixels, and a selection ring at `z-index: 0` drew across the slide there, where
+  the old border had painted behind it. The markup snapshot and every computed style stayed
+  identical, correctly: nothing on the slide had changed. Only a pixel diff against main
+  showed it. Anything decorating a mounted `SlideRenderer` from outside has this problem, so
+  keep it under the slide (`isolation: isolate` plus a negative `z-index`) and diff pixels.
+  When you do, pin the pane around the slide to one size in both builds: a rounded shape's
+  edge rasterises differently with pane size, which looks like a leak and isn't one.
 
 ---
 
@@ -471,7 +512,8 @@ src/
 │   └── index.ts      sharedLibraryAdapter() — ONE instance; attachment is
 │                     per-instance state, so two would disagree about being open
 ├── store/            deckStore ★ · playerStore · libraryStore · graphStore
-├── components/       DeckLibraryScreen · DeckScreen · deck/{SlideRenderer ★,
+├── components/       controls ★ · icons · DeckLibraryScreen · DeckScreen ·
+│                     deck/{SlideRenderer ★,
 │                     SlideCanvas ★, CanvasContextMenu, SlidePanel, EditorToolbar,
 │                     PropertiesPanel, TimingPanel ★, PresentMode ★,
 │                     BackgroundEditor, StemMixer, SeparateStems,

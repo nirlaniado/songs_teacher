@@ -48,11 +48,12 @@ export function CanvasContextMenu({ at, onClose }: { at: MenuPoint; onClose: () 
   // Flip the menu back on-screen when opened near an edge, so a right-click in
   // the bottom-right corner doesn't produce a menu half outside the window.
   useLayoutEffect(() => {
-    const box = ref.current?.getBoundingClientRect();
-    if (!box) return;
+    // Layout size, not getBoundingClientRect: that reads the entry scale of `.pop`, and undershoots the real size.
+    const menu = ref.current;
+    if (!menu) return;
     setPosition({
-      x: Math.min(at.x, window.innerWidth - box.width - 8),
-      y: Math.min(at.y, window.innerHeight - box.height - 8),
+      x: Math.min(at.x, window.innerWidth - menu.offsetWidth - 8),
+      y: Math.min(at.y, window.innerHeight - menu.offsetHeight - 8),
     });
   }, [at]);
 
@@ -113,7 +114,7 @@ export function CanvasContextMenu({ at, onClose }: { at: MenuPoint; onClose: () 
       onPointerDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: position.x, top: position.y }}
-      className="fixed z-50 min-w-52 rounded border border-line bg-panel py-1 shadow-xl"
+      className="pop fixed z-50 min-w-52 rounded-surface border border-line bg-panel p-1 shadow-xl"
     >
       {entries.map((entry, i) =>
         entry.separator ? (
@@ -125,8 +126,7 @@ export function CanvasContextMenu({ at, onClose }: { at: MenuPoint; onClose: () 
             onClick={() => {
               entry.run?.();
               onClose();
-            }}
-            className="flex w-full items-center justify-between gap-6 px-3 py-1 text-left text-[11px] text-fg hover:bg-raised disabled:text-faint disabled:hover:bg-transparent"
+            }} className="menu-item"
           >
             {entry.label}
             {entry.shortcut && <span className="text-faint">{entry.shortcut}</span>}

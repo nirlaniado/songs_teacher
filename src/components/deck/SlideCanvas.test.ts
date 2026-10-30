@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { trackGesture } from "./SlideCanvas.js";
 
@@ -36,5 +37,26 @@ describe("trackGesture", () => {
     g.target.dispatchEvent(new Event("pointerup"));
     expect(g.onMove).not.toHaveBeenCalled();
     expect(g.onEnd).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The overlay's own contract is CLAUDE.md's Traps section; these pin only that the control layer stayed out of it.
+describe("the inline editor overlay", () => {
+  const source = readFileSync(new URL("./SlideCanvas.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("{/* Inline editing, for text and tab elements alike.");
+  const overlay = source.slice(start, source.indexOf("{/* Placeholder hints", start));
+
+  it("is still a plain textarea, not a Field", () => {
+    expect(overlay).toContain("<textarea");
+    expect(overlay).not.toMatch(/<Field|<Button|className/);
+  });
+
+  it("keeps the inline outline:none that beats the global focus ring, and its own outline ring", () => {
+    expect(overlay).toContain('outline: "none"');
+    expect(overlay).toContain("solid var(--color-accent)");
+  });
+
+  it("has no motion", () => {
+    expect(overlay).not.toMatch(/transition|animation|transform/);
   });
 });
