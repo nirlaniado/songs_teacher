@@ -8,6 +8,7 @@ import { SlidePanel } from "./deck/SlidePanel.js";
 import { TimingPanel } from "./deck/TimingPanel.js";
 import { useFullscreen } from "./deck/useFullscreen.js";
 import { Button } from "./controls.js";
+import { Icon } from "./icons.js";
 
 /**
  * The editor window: slide rail, canvas, properties sidebar, and the music
@@ -139,13 +140,13 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
             Double-click text to edit · Del removes · arrows nudge
           </span>
           <Button variant="subtle" size="sm" pressed={showTiming} onClick={() => setShowTiming((v) => !v)}>
-            ♪ Music sync
+            <Icon name="music" /> Music sync
           </Button>
           <Button variant="subtle" size="sm"
             onClick={enterFocus}
             title="Edit full screen, without the music panel (Ctrl+Shift+F)"
           >
-            ⛶ Focus
+            <Icon name="focus" /> Focus
           </Button>
         </div>
       )}
@@ -165,13 +166,13 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
               Properties
             </Button>
             <Button variant="subtle" size="sm" pressed={showTiming} onClick={() => setShowTiming((v) => !v)}>
-              ♪ Music sync
+              <Icon name="music" /> Music sync
             </Button>
             <Button size="sm"
               onClick={leaveFocus}
               title="Leave focus mode (Ctrl+Shift+F, or Esc while full screen)"
             >
-              ⤡ Exit focus
+              <Icon name="exitFocus" /> Exit focus
             </Button>
           </div>
         </div>

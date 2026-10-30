@@ -6,6 +6,7 @@ import { useDeckStore } from "../../store/deckStore.js";
 import { SlideRenderer, imagePathsOf } from "./SlideRenderer.js";
 import { useDeckAssets } from "./useDeckAssets.js";
 import { Button } from "../controls.js";
+import { Icon } from "../icons.js";
 
 /**
  * Fullscreen playback: the song plays and the deck follows its cues.
@@ -215,7 +216,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
         }`}
       >
           <Button variant="subtle" icon className="text-fg" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous slide">
-            ←
+            <Icon name="arrowLeft" />
           </Button>
           <span className="tabular-nums">
             {slides.length === 0 ? 0 : index + 1} / {slides.length}
@@ -225,7 +226,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
             disabled={index >= slides.length - 1}
             aria-label="Next slide"
           >
-            →
+            <Icon name="arrowRight" />
           </Button>
 
           {deck.audio && (
@@ -235,7 +236,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
                 onClick={player.toggle}
                 aria-label={playing ? "Pause" : "Play"}
               >
-                {playing ? "⏸" : "▶"}
+                <Icon name={playing ? "pause" : "play"} />
               </Button>
               <span className="tabular-nums text-xs text-muted">
                 {formatCue(time)}

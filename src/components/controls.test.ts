@@ -5,6 +5,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Button, Field, buttonClass, type ButtonVariant, type ControlSize } from "./controls.js";
+import { Icon } from "./icons.js";
 
 const css = readFileSync(new URL("../index.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 const SIZES: ControlSize[] = ["sm", "md", "lg"];
@@ -180,5 +181,19 @@ describe("call sites", () => {
     expect(submits("UltimateGuitarAgent.tsx")).toBe(1);
     expect(submits("DeckLibraryScreen.tsx")).toBe(1);
     expect(submits("LibraryScreen.tsx")).toBe(1);
+  });
+});
+
+describe("Icon", () => {
+  it("is hidden from assistive tech, so an icon button's aria-label is its only name", () => {
+    expect(html(createElement(Icon, { name: "play" }))).toContain('aria-hidden="true"');
+  });
+
+  it("every glyph-only button says what it does", () => {
+    for (const { file, text } of sources) {
+      for (const [tag] of text.matchAll(/<Button\b[^<]*?>\s*<Icon\b[^>]*\/>\s*<\/Button>/g)) {
+        expect(`${file}: ${tag}`).toMatch(/aria-label=/);
+      }
+    }
   });
 });

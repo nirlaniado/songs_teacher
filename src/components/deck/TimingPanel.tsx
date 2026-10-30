@@ -7,6 +7,7 @@ import { AutoSuggestCues } from "./AutoSuggestCues.js";
 import { SeparateStems } from "./SeparateStems.js";
 import { StemMixer } from "./StemMixer.js";
 import { Button, Field } from "../controls.js";
+import { Icon } from "../icons.js";
 
 /**
  * The music-sync panel: attach an MP3, then give each slide a cue time so the
@@ -111,7 +112,7 @@ export function TimingPanel() {
               disabled={!player.available}
               aria-label={playing ? "Pause" : "Play"}
             >
-              {playing ? "⏸" : "▶"}
+              <Icon name={playing ? "pause" : "play"} />
             </Button>
             <span className="tabular-nums text-xs text-muted">
               {formatCue(time)} / {duration ? formatCue(duration) : "—"}
@@ -253,7 +254,7 @@ export function TimingPanel() {
                         title="Clear cue"
                         aria-label={`Clear cue for ${slide.name}`}
                       >
-                        ✕
+                        <Icon name="close" />
                       </Button>
                     )}
                   </td>

@@ -4,6 +4,7 @@ import { useDeckStore } from "../../store/deckStore.js";
 import { SlideRenderer, imagePathsOf } from "./SlideRenderer.js";
 import { useDeckAssets } from "./useDeckAssets.js";
 import { Button } from "../controls.js";
+import { Icon } from "../icons.js";
 
 const THUMB_SCALE = 0.115; // 1280x720 -> ~147x83
 
@@ -31,7 +32,7 @@ export function SlidePanel() {
           title="New slide"
           aria-label="New slide"
         >
-          +
+          <Icon name="plus" />
         </Button>
       </div>
 
@@ -78,7 +79,7 @@ export function SlidePanel() {
                 title="Duplicate"
                 aria-label={`Duplicate slide ${i + 1}`}
               >
-                ⧉
+                <Icon name="duplicate" />
               </Button>
               <Button size="sm" icon className="hover:text-danger"
                 onClick={() => {
@@ -87,7 +88,7 @@ export function SlidePanel() {
                 title="Delete"
                 aria-label={`Delete slide ${i + 1}`}
               >
-                ✕
+                <Icon name="close" />
               </Button>
             </div>
           </li>

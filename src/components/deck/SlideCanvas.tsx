@@ -15,6 +15,7 @@ import { JUSTIFY, TAB_FONT_STACK, SlideRenderer, elementStyle, imagePathsOf } fr
 import { CanvasContextMenu, type MenuPoint } from "./CanvasContextMenu.js";
 import { useDeckAssets } from "./useDeckAssets.js";
 import { Button, Field } from "../controls.js";
+import { Icon } from "../icons.js";
 
 /**
  * The editing surface.
@@ -923,7 +924,7 @@ export function SlideCanvas() {
               setCustomBend("");
             }}
           >
-            +
+            <Icon name="plus" />
           </Button>
         </div>
       )}

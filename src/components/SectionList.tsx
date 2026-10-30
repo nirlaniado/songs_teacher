@@ -2,6 +2,7 @@ import { useLibraryStore } from "../store/libraryStore.js";
 import { usePlayerStore } from "../store/playerStore.js";
 import { SectionType, type Section } from "../schema/song.js";
 import { Button, Field } from "./controls.js";
+import { Icon } from "./icons.js";
 
 const TYPES = SectionType.options;
 
@@ -43,7 +44,7 @@ function SectionRow({ section, active }: { section: Section; active: boolean }) 
             if (confirm(`Delete "${section.name}"?`)) removeSection(section.id);
           }}
         >
-          ✕
+          <Icon name="close" />
         </Button>
       </div>
 

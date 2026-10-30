@@ -1,6 +1,7 @@
 import { usePlayerStore } from "../store/playerStore.js";
 import { useLibraryStore } from "../store/libraryStore.js";
 import { Button } from "./controls.js";
+import { Icon } from "./icons.js";
 
 function formatTime(t: number): string {
   if (!Number.isFinite(t)) return "0:00";
@@ -34,7 +35,7 @@ export function Transport() {
         disabled={!transport}
         title={isPlaying ? "Pause" : "Play"}
       >
-        {isPlaying ? "⏸" : "▶"}
+        <Icon name={isPlaying ? "pause" : "play"} />
       </Button>
 
       <span className="tabular-nums text-sm text-muted">

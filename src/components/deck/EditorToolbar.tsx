@@ -3,6 +3,7 @@ import { SLIDE_H, SLIDE_W, type ShapeKind } from "../../schema/deck.js";
 import { TUNING_PRESETS, tabScaffold } from "../../deck/templates.js";
 import { centeredFrame, useDeckStore } from "../../store/deckStore.js";
 import { Button, Field } from "../controls.js";
+import { Icon, type IconName } from "../icons.js";
 
 /**
  * Insert bar + arrange/align + view controls + undo/redo + save + present.
@@ -23,13 +24,13 @@ const SHAPES: Array<{ shape: ShapeKind; label: string }> = [
   { shape: "arrow", label: "Arrow" },
 ];
 
-const ALIGNMENTS: Array<{ mode: "left" | "center" | "right" | "top" | "middle" | "bottom"; glyph: string; label: string }> = [
-  { mode: "left", glyph: "⬅", label: "Align left" },
-  { mode: "center", glyph: "↔", label: "Centre horizontally" },
-  { mode: "right", glyph: "➡", label: "Align right" },
-  { mode: "top", glyph: "⬆", label: "Align top" },
-  { mode: "middle", glyph: "↕", label: "Centre vertically" },
-  { mode: "bottom", glyph: "⬇", label: "Align bottom" },
+const ALIGNMENTS: Array<{ mode: "left" | "center" | "right" | "top" | "middle" | "bottom"; icon: IconName; label: string }> = [
+  { mode: "left", icon: "alignLeft", label: "Align left" },
+  { mode: "center", icon: "alignCentre", label: "Centre horizontally" },
+  { mode: "right", icon: "alignRight", label: "Align right" },
+  { mode: "top", icon: "alignTop", label: "Align top" },
+  { mode: "middle", icon: "alignMiddle", label: "Centre vertically" },
+  { mode: "bottom", icon: "alignBottom", label: "Align bottom" },
 ];
 
 /**
@@ -175,7 +176,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
           aria-expanded={tuningMenu}
           onClick={() => setTuningMenu((v) => !v)}
         >
-          + Tab ▾
+          + Tab <Icon name="chevronDown" />
         </Button>
         {tuningMenu && (
           <div
@@ -210,7 +211,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
       {/* Shape picker — Impress puts its shapes behind one dropdown too. */}
       <div className="relative">
         <Button variant="subtle" aria-haspopup="menu" aria-expanded={shapeMenu} onClick={() => setShapeMenu((v) => !v)}>
-          + Shape ▾
+          + Shape <Icon name="chevronDown" />
         </Button>
         {shapeMenu && (
           <div
@@ -241,7 +242,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Bring to front (Ctrl+Shift+Home)"
         aria-label="Bring to front"
       >
-        ⤒
+        <Icon name="toFront" />
       </Button>
       <Button variant="subtle" icon
         disabled={!hasSelection}
@@ -249,7 +250,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Bring forward (Ctrl+Shift+↑)"
         aria-label="Bring forward"
       >
-        ↑
+        <Icon name="forward" />
       </Button>
       <Button variant="subtle" icon
         disabled={!hasSelection}
@@ -257,7 +258,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Send backward (Ctrl+Shift+↓)"
         aria-label="Send backward"
       >
-        ↓
+        <Icon name="backward" />
       </Button>
       <Button variant="subtle" icon
         disabled={!hasSelection}
@@ -265,13 +266,13 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Send to back (Ctrl+Shift+End)"
         aria-label="Send to back"
       >
-        ⤓
+        <Icon name="toBack" />
       </Button>
 
       <span className="mx-1 h-4 w-px bg-line" />
 
       {/* Align. One element aligns to the slide, several to each other. */}
-      {ALIGNMENTS.map(({ mode, glyph, label }) => (
+      {ALIGNMENTS.map(({ mode, icon, label }) => (
         <Button variant="subtle" icon
           key={mode}
           disabled={!hasSelection}
@@ -279,7 +280,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
           title={selectionCount > 1 ? `${label} (within the selection)` : `${label} (on the slide)`}
           aria-label={label}
         >
-          {glyph}
+          <Icon name={icon} />
         </Button>
       ))}
       <Button variant="subtle" icon
@@ -288,7 +289,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Distribute horizontally — needs three or more"
         aria-label="Distribute horizontally"
       >
-        ⇹
+        <Icon name="distributeH" />
       </Button>
       <Button variant="subtle" icon
         disabled={selectionCount < 3}
@@ -296,7 +297,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Distribute vertically — needs three or more"
         aria-label="Distribute vertically"
       >
-        ⇳
+        <Icon name="distributeV" />
       </Button>
       <Button variant="subtle" icon
         disabled={!hasSelection}
@@ -304,7 +305,7 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Duplicate (Ctrl+D)"
         aria-label="Duplicate"
       >
-        ⧉
+        <Icon name="duplicate" />
       </Button>
 
       <span className="mx-1 h-4 w-px bg-line" />
@@ -315,14 +316,14 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
         title="Show grid"
         aria-label="Show grid"
       >
-        ▦
+        <Icon name="grid" />
       </Button>
       <Button variant="subtle" icon pressed={snapEnabled}
         onClick={toggleSnap}
         title="Snap to guides — hold Alt while dragging to suspend"
         aria-label="Snap to guides"
       >
-        🧲
+        <Icon name="magnet" />
       </Button>
       <Field
         as="select"
@@ -343,10 +344,10 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
       <span className="mx-1 h-4 w-px bg-line" />
 
       <Button variant="subtle" icon onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
-        ↶
+        <Icon name="undo" />
       </Button>
       <Button variant="subtle" icon onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-        ↷
+        <Icon name="redo" />
       </Button>
 
       <div className="ml-auto flex items-center gap-2">
@@ -366,13 +367,13 @@ export function EditorToolbar({ onPresent }: { onPresent: () => void }) {
               : "Download the presentation and its media as a .zip"
           }
         >
-          {exporting ? "Packing…" : "⭳ Download"}
+          {exporting ? "Packing…" : <><Icon name="download" /> Download</>}
         </Button>
         <Button variant="primary"
           onClick={onPresent}
           disabled={!deck || deck.slides.length === 0}
         >
-          ▶ Present
+          <Icon name="play" /> Present
         </Button>
       </div>
     </div>
