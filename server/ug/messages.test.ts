@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AgentError, parseChordContent, readTab, searchPage, selectCandidate, siteUrl } from "./core.js";
@@ -6,10 +6,16 @@ import type { TabCandidate } from "../../src/ug/types.js";
 
 const root = new URL("../../", import.meta.url).pathname;
 const read = (file: string) => readFileSync(join(root, file), "utf8");
-const sources = ["src", "server"].flatMap(dir =>
-  (readdirSync(join(root, dir), { recursive: true }) as string[])
-    .filter(file => /\.tsx?$/.test(file))
-    .map(file => ({ file: join(dir, file), text: read(join(dir, file)) })));
+const files = ["src", "server"].flatMap(dir => (readdirSync(join(root, dir), { recursive: true }) as string[])
+  .map(file => join(dir, file))
+  .filter(file => statSync(join(root, file)).isFile()));
+// Binary means "does not decode", not "contains a NUL": src/theory/rotation.test.ts has literal NULs and is ordinary source.
+const decoded = (file: string) => {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(join(root, file))); } catch { return null; }
+};
+const textFiles = files.flatMap(file => { const text = decoded(file); return text === null ? [] : [{ file, text }]; });
+const skipped = files.filter(file => decoded(file) === null);
+const BINARY_FORMAT = /\.(png|jpe?g|gif|webp|ico|mp3|wav|onnx|wasm|woff2?|zip)$/i;
 
 const candidate = (over: Partial<TabCandidate> = {}): TabCandidate => ({ id: "1", url: "https://tabs.ultimate-guitar.com/tab/a/b-chords-1", title: "Song", artist: "Artist", version: 1, views: 10, official: false, ...over });
 const message = (fn: () => unknown) => {
@@ -18,9 +24,17 @@ const message = (fn: () => unknown) => {
 };
 
 describe("the chord agent speaks one language", () => {
-  it("has no Hebrew left in the source", () => {
-    expect(sources.length).toBeGreaterThan(50);
-    for (const { file, text } of sources) expect(text, file).not.toMatch(/[\u0590-\u05FF]/);
+  it("scans every file under src and server, skipping only known binary formats", () => {
+    expect(textFiles.map(f => f.file)).toEqual(expect.arrayContaining([
+      join("src", "index.css"), join("src", "example", "song.example.json"), join("src", "theory", "rotation.test.ts"),
+      join("src", "components", "deck", "__snapshots__", "SlideRenderer.test.ts.snap"), join("server", "ug", "messages.test.ts"),
+    ]));
+    // A text file in another encoding fails to decode too, so a skip has to be a recognised format or it could hide anything.
+    expect(skipped.filter(file => !BINARY_FORMAT.test(file))).toEqual([]);
+  });
+
+  it("finds no Hebrew in any of those files", () => {
+    for (const { file, text } of textFiles) expect(text, file).not.toMatch(/[\u0590-\u05FF]/);
   });
 
   it("does not force a direction or a date locale on the screen", () => {
@@ -37,8 +51,9 @@ describe("the chord agent speaks one language", () => {
     expect(screen).toMatch(/dir="auto"[^>]*>\{c\.title\}/);
   });
 
-  it("points at the documented command, not the old alias", () => {
-    for (const { file, text } of sources) if (!file.endsWith("messages.test.ts")) expect(text, file).not.toContain("dev:agent");
+  it("names the old command alias in none of those files, and both of the screen's fetch failures say npm start", () => {
+    const alias = ["dev", "agent"].join(":");
+    for (const { file, text } of textFiles) expect(text, file).not.toContain(alias);
     expect(read("src/components/UltimateGuitarAgent.tsx").match(/Run npm start\./g)).toHaveLength(2);
   });
 });
