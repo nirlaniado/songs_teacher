@@ -125,7 +125,7 @@ describe("motion", () => {
   });
 
   it("moves nothing except through those tokens", () => {
-    const literal = [...css.matchAll(/transform:\s*([^;]+);/g)].map((m) => m[1]!);
+    const literal = [...css.matchAll(/(?<![-\w])transform:\s*([^;]+);/g)].map((m) => m[1]!);
     expect(literal.length).toBeGreaterThan(0);
     for (const value of literal) expect(value).toMatch(/\(var\(--/);
   });
@@ -181,6 +181,41 @@ describe("call sites", () => {
     expect(submits("UltimateGuitarAgent.tsx")).toBe(1);
     expect(submits("DeckLibraryScreen.tsx")).toBe(1);
     expect(submits("LibraryScreen.tsx")).toBe(1);
+  });
+});
+
+describe("the accent", () => {
+  const value = (name: string) => new RegExp(`--studio-${name}:\\s*(#[0-9a-f]{6})`).exec(css)?.[1] ?? "";
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi! + 0.05) / (lo! + 0.05);
+  };
+  const surfaces = ["ink", "slate", "night", "deep", "well"].map(value);
+
+  it("is violet, reaching components only through the semantic token", () => {
+    expect(value("violet")).not.toBe("");
+    expect(css).toMatch(/--color-accent:\s*var\(--studio-violet\)/);
+    for (const { file, text } of sources) expect(text, file).not.toContain(value("violet"));
+  });
+
+  it("carries white text as a fill, at both ends of the button gradient", () => {
+    for (const fill of ["violet", "violet-deep", "indigo"]) expect(contrast(value(fill), "#ffffff")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("stays readable as text only through its lighter step", () => {
+    for (const surface of surfaces) expect(contrast(value("violet-light"), surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(value("violet"), value("slate"))).toBeLessThan(4.5);
+  });
+
+  it("still shows as a selection mark on every dark surface", () => {
+    for (const surface of surfaces) expect(contrast(value("violet"), surface)).toBeGreaterThanOrEqual(3);
   });
 });
 

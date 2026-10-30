@@ -9,8 +9,9 @@ import { useDeckStore } from "../../store/deckStore.js";
  * memory for the whole session — the same leak `AudioHandle.release()` exists
  * to prevent, and a slide deck touches far more blobs than a song does.
  */
-export function useDeckAssets(paths: readonly string[]): Record<string, string> {
-  const deckId = useDeckStore((s) => s.deck?.id ?? null);
+export function useDeckAssets(paths: readonly string[], forDeck?: string): Record<string, string> {
+  const openDeckId = useDeckStore((s) => s.deck?.id ?? null);
+  const deckId = forDeck ?? openDeckId;
   const adapter = useDeckStore((s) => s.adapter);
   const [urls, setUrls] = useState<Record<string, string>>({});
 

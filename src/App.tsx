@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useDeckStore } from "./store/deckStore.js";
 import { useLibraryStore } from "./store/libraryStore.js";
+import { AppNav, type NavSection } from "./components/AppNav.js";
 import { DeckLibraryScreen } from "./components/DeckLibraryScreen.js";
 import { DeckScreen } from "./components/DeckScreen.js";
 import { LibraryScreen } from "./components/LibraryScreen.js";
@@ -43,7 +44,15 @@ export default function App() {
     if (attached) void restoreSongs();
   }, [attached, restoreSongs]);
 
-  if (screen === "ug") return <Suspense fallback={<Centered>Loading the chord agent…</Centered>}><UltimateGuitarAgent onBack={() => setScreen("decks")} onDeckCreated={() => setScreen("editor")} /></Suspense>;
+  // The sections the nav reaches. The editor and an open song fill the window, so they stay outside it.
+  const section = (active: NavSection, body: React.ReactNode) => (
+    <div className="app-shell">
+      <div className="app-main">{body}</div>
+      <AppNav active={active} onGo={setScreen} />
+    </div>
+  );
+
+  if (screen === "ug") return section("ug", <Suspense fallback={<Centered>Loading the chord agent…</Centered>}><UltimateGuitarAgent onBack={() => setScreen("decks")} onDeckCreated={() => setScreen("editor")} /></Suspense>);
 
   if (!supported) {
     return (
@@ -95,7 +104,8 @@ export default function App() {
   if (screen === "songs" || screen === "graph") {
     if (currentSong) return <SongScreen />;
     if (screen === "graph") {
-      return (
+      return section(
+        "graph",
         <Suspense
           fallback={
             <Centered>
@@ -104,36 +114,13 @@ export default function App() {
           }
         >
           <GraphView onBack={() => setScreen("songs")} />
-        </Suspense>
+        </Suspense>,
       );
     }
-    return (
-      <div>
-        <div className="border-b border-line px-6 py-2">
-          <Button variant="subtle" size="sm"
-            onClick={() => setScreen("decks")}
-          >
-            ← Presentations
-          </Button>
-        </div>
-        <LibraryScreen onViewGraph={() => setScreen("graph")} />
-      </div>
-    );
+    return section("songs", <LibraryScreen onViewGraph={() => setScreen("graph")} />);
   }
 
-  return (
-    <div>
-      <DeckLibraryScreen onOpen={() => setScreen("editor")} />
-      <div className="mx-auto flex max-w-3xl gap-6 px-10 pb-10">
-        <Button variant="subtle" size="sm" onClick={() => setScreen("ug")}>Chord agent · Ultimate Guitar</Button>
-        <Button variant="subtle" size="sm"
-          onClick={() => setScreen("songs")}
-        >
-          Song study tools →
-        </Button>
-      </div>
-    </div>
-  );
+  return section("decks", <DeckLibraryScreen onOpen={() => setScreen("editor")} />);
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

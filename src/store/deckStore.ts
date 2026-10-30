@@ -17,6 +17,7 @@ import { initialStemState, sortStems, type StemState } from "../audio/mix.js";
 import { applyLayout, layoutById } from "../deck/templates.js";
 import { alignedFrame, boundsOf, slideBounds, type AlignMode } from "../deck/geometry.js";
 import { bundleFilename, downloadBlob, exportDeckBundle, readDeckBundle } from "../deck/bundle.js";
+import type { LibraryView } from "../deck/library.js";
 import { chordDeckSlides, chordSectionPlan } from "../deck/fromChords.js";
 import { cuesForAudio } from "../audio/autoCue.js";
 import type { ChordResult } from "../ug/types.js";
@@ -105,6 +106,8 @@ interface DeckState {
   zoom: number | "fit";
   showGrid: boolean;
   snapEnabled: boolean;
+  /** How the library lists decks. View state too, but it outlives the session, so it sits in localStorage rather than any deck. */
+  libraryView: LibraryView;
 
   past: Deck[];
   future: Deck[];
@@ -213,11 +216,22 @@ interface DeckState {
 
   // view
   setZoom(zoom: number | "fit"): void;
+  setLibraryView(view: LibraryView): void;
   toggleGrid(): void;
   toggleSnap(): void;
 
   undo(): void;
   redo(): void;
+}
+
+const LIBRARY_VIEW_KEY = "songs-teacher.library-view";
+
+function savedLibraryView(): LibraryView {
+  try {
+    return globalThis.localStorage?.getItem(LIBRARY_VIEW_KEY) === "grid" ? "grid" : "list";
+  } catch {
+    return "list";
+  }
 }
 
 function messageOf(err: unknown): string {
@@ -276,6 +290,7 @@ export const useDeckStore = create<DeckState>((set, get) => {
     zoom: "fit",
     showGrid: false,
     snapEnabled: true,
+    libraryView: savedLibraryView(),
 
     past: [],
     future: [],
@@ -917,6 +932,15 @@ export const useDeckStore = create<DeckState>((set, get) => {
     },
 
     // ── view ─────────────────────────────────────────────────────────────
+
+    setLibraryView(view) {
+      set({ libraryView: view });
+      try {
+        globalThis.localStorage?.setItem(LIBRARY_VIEW_KEY, view);
+      } catch {
+        // Storage can be refused; the choice still holds until the page reloads.
+      }
+    },
 
     setZoom(zoom) {
       set({ zoom });
