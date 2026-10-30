@@ -91,4 +91,10 @@ describe("the thumbnail rail keeps control styling away from the slide it wraps"
     expect(rules).toContain("position: relative");
     expect(rules).not.toMatch(/transform|font|letter-spacing|line-height|color:/);
   });
+
+  it("paints its selection ring under the slide, which overhangs the button, never over it", () => {
+    const rules = [...css.matchAll(/\.slide-thumb(?:\[[^\]]*\])?(?:::after)? \{([^}]*)\}/g)].map((m) => m[1]!).join("");
+    expect(rules).toContain("isolation: isolate");
+    expect([...rules.matchAll(/z-index:\s*(-?\d+)/g)].map((m) => m[1])).toEqual(["-1"]);
+  });
 });
