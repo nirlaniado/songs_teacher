@@ -12,7 +12,7 @@ const identitySchema = z.object({ title: z.string().trim().min(1).max(200), arti
 
 // Sends only the song request to the model and validates the title and artist returned through its tool call. Credentials and chords are never sent to the model.
 export async function identifySong(query: string): Promise<SongIdentity> {
-  if (!config.agentApiKey) throw new AgentError("configuration", "חסר OPENROUTER_API_KEY ב־ENV של השירות המקומי.");
+  if (!config.agentApiKey) throw new AgentError("configuration", "OPENROUTER_API_KEY is not set for the local service. Add it to .env and run npm start again.");
   const client = new OpenAI({ baseURL: config.agentBaseURL, apiKey: config.agentApiKey, timeout: 45_000, maxRetries: 1 });
   try {
     const response = await client.chat.completions.create({
@@ -33,15 +33,15 @@ export async function identifySong(query: string): Promise<SongIdentity> {
     const call = calls[0];
     // "stop" is accepted because OpenAI-compatible gateways disagree on finish_reason with tools; strictness breaks free providers.
     if (!choice || !["tool_calls", "stop"].includes(choice.finish_reason) || calls.length !== 1 || call?.type !== "function")
-      throw new AgentError("model_output", "זיהוי השיר לא הושלם. נסה שם שיר ואמן מפורשים.");
-    if (call.function.name === "clarify") throw new AgentError("clarification", "ציין שם שיר ואמן מדויקים כדי שהסוכן יוכל לחפש את הגרסה הנכונה.");
-    if (call.function.name !== "search_ultimate_guitar") throw new AgentError("model_output", "המודל החזיר פעולה לא מוכרת.");
+      throw new AgentError("model_output", "Song identification did not finish. Try an explicit song title and artist.");
+    if (call.function.name === "clarify") throw new AgentError("clarification", "Give the exact song title and artist so the agent can search for the right version.");
+    if (call.function.name !== "search_ultimate_guitar") throw new AgentError("model_output", "The model returned an unknown action.");
     return identitySchema.parse(JSON.parse(call.function.arguments));
   } catch (error) {
     if (error instanceof AgentError) throw error;
-    if (error instanceof OpenAI.APIError && error.status === 429) throw new AgentError("model_api", "הגעת למגבלת השימוש החינמית של המודל (לדקה או ליום). נסה שוב מאוחר יותר.");
-    if (error instanceof OpenAI.APIError) throw new AgentError("model_api", `לא ניתן להפעיל את המודל (HTTP ${error.status ?? "לא ידוע"}). בדוק מפתח API, גישה למודל ומכסה.`);
-    throw new AgentError("model_output", "זיהוי השיר נכשל. בדוק את חיבור המודל ונסה שוב.");
+    if (error instanceof OpenAI.APIError && error.status === 429) throw new AgentError("model_api", "You have reached the model's free usage limit (per minute or per day). Try again later.");
+    if (error instanceof OpenAI.APIError) throw new AgentError("model_api", `The model could not be run (HTTP ${error.status ?? "unknown"}). Check the API key, model access and quota.`);
+    throw new AgentError("model_output", "Song identification failed. Check the model connection and try again.");
   }
 }
 
@@ -69,12 +69,12 @@ export class GuitarAgent {
   async close() { await this.browser.close(); }
   // Creates a search request with a unique ID and starts processing it in the background. Prevents overlap with an active operation or a login awaiting user input.
   start(query: string) {
-    if (this.busy) throw new AgentError("busy", "הסוכן מטפל כרגע בבקשה אחרת.");
+    if (this.busy) throw new AgentError("busy", "The agent is handling another request.");
     // A waiting login owns the browser; do not navigate it away from an OTP form.
     if ([...this.jobs.values()].some(c => c.job.status === "needs_login"))
-      throw new AgentError("busy", "קיימת בקשה שממתינה להתחברות. המשך או בטל אותה תחילה.");
+      throw new AgentError("busy", "A request is waiting for login. Continue or cancel it first.");
     while (this.jobs.size >= 50) this.jobs.delete(this.jobs.keys().next().value!);
-    const job: AgentJob = { id: randomUUID(), query, status: "running", message: "מזהה את השיר והאמן…", events: [] };
+    const job: AgentJob = { id: randomUUID(), query, status: "running", message: "Identifying the song and artist…", events: [] };
     const context = { job };
     this.jobs.set(job.id, context);
     void this.run(context);
@@ -82,15 +82,15 @@ export class GuitarAgent {
   }
   // Resumes a request after login, an error, or a manual choice. Verifies that the selected version was among the offered candidates.
   resume(id: string, candidateId?: string) {
-    if (this.busy) throw new AgentError("busy", "הסוכן מטפל כרגע בבקשה אחרת.");
+    if (this.busy) throw new AgentError("busy", "The agent is handling another request.");
     if ([...this.jobs.values()].some(c => c.job.id !== id && c.job.status === "needs_login"))
-      throw new AgentError("busy", "בקשה אחרת ממתינה להתחברות. המשך או בטל אותה תחילה.");
+      throw new AgentError("busy", "Another request is waiting for login. Continue or cancel it first.");
     const context = this.jobs.get(id);
-    if (!context) throw new AgentError("not_found", "הבקשה לא נמצאה. התחל חיפוש חדש.");
-    if (!["needs_login", "needs_choice", "error"].includes(context.job.status)) throw new AgentError("invalid_state", "לא ניתן להמשיך בקשה זו כעת.");
+    if (!context) throw new AgentError("not_found", "This request was not found. Start a new search.");
+    if (!["needs_login", "needs_choice", "error"].includes(context.job.status)) throw new AgentError("invalid_state", "This request can't be continued right now.");
     if (context.job.status === "needs_choice") {
       const chosen = context.job.candidates?.find(c => `${c.official}:${c.id}` === candidateId);
-      if (!chosen) throw new AgentError("invalid_choice", "בחר אחת מהגרסאות שהסוכן מצא.");
+      if (!chosen) throw new AgentError("invalid_choice", "Choose one of the versions the agent found.");
       if (context.choiceKind === "identity") {
         context.job.identity = { title: chosen.title, artist: chosen.artist };
         context.selected = undefined;
@@ -102,9 +102,9 @@ export class GuitarAgent {
   }
   // Removes a request and closes the browser when no operation is active. Does not interrupt an extraction already in progress.
   async cancel(id: string) {
-    if (this.busy) throw new AgentError("busy", "לא ניתן לבטל בזמן פעולה. המתן לסיומה.");
+    if (this.busy) throw new AgentError("busy", "A request can't be cancelled while an action is running. Wait for it to finish.");
     const context = this.jobs.get(id);
-    if (!context) throw new AgentError("not_found", "הבקשה לא נמצאה.");
+    if (!context) throw new AgentError("not_found", "This request was not found.");
     this.jobs.delete(id);
     await this.browser.close();
   }
@@ -117,21 +117,21 @@ export class GuitarAgent {
     const progress = (message: string) => { job.message = message; job.events.push(message); job.events = job.events.slice(-100); };
     this.browser.setProgress(progress);
     try {
-      if (!job.identity) { progress("מזהה את השיר והאמן…"); job.identity = await this.identify(job.query); }
+      if (!job.identity) { progress("Identifying the song and artist…"); job.identity = await this.identify(job.query); }
       await this.browser.login();
       if (!context.selected) {
         const results = await this.browser.search(job.identity);
         let matches = results.filter(c => sameSong(c, job.identity!));
         if (!matches.length) {
-          if (!results.length) throw new AgentError("not_found", "לא נמצאו גרסאות אקורדים לשיר באתר.");
+          if (!results.length) throw new AgentError("not_found", "No chord versions of this song were found on the site.");
           job.status = "needs_choice";
           job.candidates = results;
           context.choiceKind = "identity";
-          progress("לא נמצאה התאמה מדויקת. בחר תוצאה כדי לאשר את השיר והאמן; לאחר מכן ייבדקו הגרסאות שלו.");
+          progress("No exact match was found. Choose a result to confirm the song and artist; its versions will be checked next.");
           return;
         }
         if (!matches.some(c => c.official)) {
-          progress("לא נמצאה גרסה רשמית בחיפוש המלא. בודק מספר צפיות לכל גרסת אקורדים…");
+          progress("No official version was found in the full search. Checking the view count of each chord version…");
           const inspected: TabCandidate[] = [];
           for (const candidate of matches) {
             try {
@@ -143,7 +143,7 @@ export class GuitarAgent {
               // A missing statistics field is represented as null; access/network failures
               // stop the job so they cannot hide a previously undiscovered Official link.
               if (error instanceof AgentError) throw error;
-              throw new AgentError("inspection", "לא ניתן להשלים את בדיקת הגרסאות באתר.");
+              throw new AgentError("inspection", "The check of the versions on the site could not be completed.");
             }
           }
           matches = inspected;
@@ -158,10 +158,10 @@ export class GuitarAgent {
       const result = await this.browser.extract(context.selected, context.selection!);
       await this.save(result);
       job.result = result; job.status = "done";
-      progress(result.source.official ? "האקורדים חולצו מגרסה המסומנת Official באתר." : "האקורדים חולצו מגרסת משתמשים — ייתכנו אי־דיוקים.");
+      progress(result.source.official ? "Chords extracted from a version marked Official on the site." : "Chords extracted from a user version, which may contain inaccuracies.");
     } catch (error) {
       job.status = error instanceof AgentError && error.code === "needs_login" ? "needs_login" : "error";
-      progress(error instanceof AgentError ? error.message : "אירעה שגיאה בשירות המקומי. לא הוחזרו אקורדים משוערים.");
+      progress(error instanceof AgentError ? error.message : "The local service hit an error. No guessed chords were returned.");
     } finally { this.busy = false; }
   }
 }
