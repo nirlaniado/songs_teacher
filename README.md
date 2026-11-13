@@ -6,7 +6,9 @@ Press Present and the track plays while the deck advances itself — built for m
 teachers who want to talk over a song instead of clicking through it.
 
 Optional extras: an Ultimate Guitar agent that fetches a song's chords and turns them into
-a deck, in-browser stem separation (mute vocals, solo bass), and a song-study mode.
+a deck, in-browser stem separation (mute vocals, solo bass), a song-study mode, and a small
+accounts backend (username/password on MySQL). The editor needs none of them, and nothing
+requires signing in.
 
 ## Quick start
 
@@ -34,6 +36,8 @@ both. (`npm run dev:agent` is the same command under its older name.)
 ```bash
 npm test             # unit tests
 npm run typecheck
+npm run api:migrate  # accounts backend: apply migrations to DATABASE_URL
+npm run api:server   # accounts backend on 127.0.0.1:4319
 npm run build        # typecheck + production build
 ```
 
@@ -101,7 +105,51 @@ src/
 ├── graph/            harmonic index — pure, rebuilt on demand, nothing persisted
 └── example/
     └── song.example.json
+
+server/
+├── ug/               the chord agent's local service (port 4318)
+└── api/              optional accounts backend (port 4319) — Fastify + Drizzle + MySQL
+    ├── app.ts          routes, cookie, rate limit; buildApp() takes any AuthStore
+    ├── auth.ts         argon2id hashing, 30-day sessions, constant-work login
+    ├── rules.ts        the one Zod schema for usernames and passwords
+    ├── store.ts        AuthStore interface + the in-memory fake the tests use
+    ├── db.ts · schema.ts  the MySQL store and its Drizzle tables
+    ├── migrate.ts      applies migrations/ (committed SQL)
+    └── server.ts       entry point, listens on 127.0.0.1:4319
 ```
+
+## Accounts backend (optional)
+
+A small Fastify service in `server/api/` that gives users username/password accounts in
+MySQL. The editor works the same without it; no deck, song or audio is stored on the server.
+
+1. Have a MySQL 8.0.13+ server somewhere (the app assumes nothing about where) and an empty
+   database for it.
+2. Put its URL in `.env` as `DATABASE_URL` (see `.env.example`).
+3. `npm run api:migrate` applies the committed SQL migrations in `server/api/migrations/`.
+4. `npm run api:server` starts the service on `127.0.0.1:4319`. Vite proxies `/api/auth` and
+   `/api/health` to it in `dev` and `preview`.
+
+| Endpoint | Does |
+|---|---|
+| `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken) |
+| `POST /api/auth/login` | `{username, password}` → signs in (401 on any failure) |
+| `POST /api/auth/logout` | deletes the session row and clears the cookie |
+| `GET /api/auth/me` | the signed-in user, or 401 |
+| `GET /api/health` | 200 `{database: "reachable"}`, 503 `"unreachable"` or `"not configured"` |
+
+Usernames are 3–32 letters, digits, `_` or `-`, unique ignoring case; passwords are at
+least 10 characters with no composition rules. Passwords are hashed with argon2id. The
+session cookie is `httpOnly`, `SameSite=Lax`, `Secure` off localhost, and lasts 30 days; the
+database keeps only a SHA-256 of the cookie token. Signup and login are rate-limited to 10
+attempts per minute per client IP.
+
+After changing `server/api/schema.ts`, run `npm run api:generate` to write a new migration
+and commit it. `npm test` needs no database; the MySQL store's own test runs only when
+`DATABASE_URL` is set, against a migrated database.
+
+**Docker files belong to the owner.** No Dockerfile, compose file or other container
+config is written by the agent team.
 
 ## Ultimate Guitar chord agent
 

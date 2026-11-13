@@ -17,6 +17,12 @@ Secondary and older: a song-study mode for marking sections of a track and writi
 harmonic analysis, plus a knowledge graph linking songs by shared harmony. Still works,
 reachable from the start screen, no longer what the app is for.
 
+**Optional backend: accounts.** `server/api/` is a small Fastify service giving users
+username/password accounts in MySQL (approved by the owner). It is strictly optional: the
+editor never calls it, works unchanged without it, and nothing requires signing in. It
+stores users and sessions only — no decks, songs or audio live on the server. No email,
+password reset or third-party sign-in.
+
 ### Product direction
 
 The native React/TypeScript editor is the sole editing path. The experimental
@@ -231,6 +237,9 @@ Each was chosen against a real alternative. Don't substitute without a reason.
 | Separation library | **`demucs-web`**, not hand-ported inference | It owns STFT (4096/1024), reflect padding, segmentation and overlap-add — all easy to get subtly wrong. Costs: it hardcodes four sources, so a guitar stem isn't available. |
 | Stem storage | **WAV** | Trivial to encode with no dependency; the browser has no non-realtime MP3/Opus encoder. Costs ~10MB per stem-minute on disk. |
 | Isolation policy | **COEP `credentialless`**, not `require-corp` | `require-corp` blocks cross-origin subresources that don't opt in, which would break fetching the model from Hugging Face. |
+| Accounts backend | **Fastify + Drizzle ORM + MySQL**, in `server/api/` sharing the root `package.json` | Not a separate package/workspace: one install, one lockfile. Drizzle keeps the schema in TypeScript with committed SQL migrations. `DATABASE_URL` is the only config — nothing assumes where MySQL runs. |
+| Password hashing | **`@node-rs/argon2`** (argon2id) | Not `argon2` (node-gyp): ships prebuilt binaries, so `npm ci` on a clean runner needs no C toolchain. |
+| Sessions | **Server-side row + opaque cookie** | Not JWT: logout must actually end a session, which a stateless token can't do. The table holds a SHA-256 of the token, never the token, so a DB leak can't be replayed. Costs one query per `me`. |
 | Lyrics | **From the user's own Ultimate Guitar chart, or typed** | No lyrics *provider* is integrated (Musixmatch/LyricFind need commercial terms; lyric sites are off-limits). The chord agent keeps the lyrics on the chart the user's own subscribed account opens, and they are used on slides and to time the deck. |
 
 ---
@@ -293,10 +302,16 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 365 tests
-npm run typecheck  # tsc --noEmit
+npm test           # vitest — 410 tests; needs no database
+npm run typecheck  # app, chord agent and accounts backend tsconfigs
 npm run build      # typecheck + production build
+npm run api:server   # accounts backend on 127.0.0.1:4319 (needs DATABASE_URL)
+npm run api:migrate  # apply server/api/migrations to DATABASE_URL
+npm run api:generate # after editing server/api/schema.ts: write a new migration, commit it
 ```
+
+Auth logic is tested against `MemoryStore`, an in-memory `AuthStore`; `db.test.ts`
+exercises the real MySQL store and is skipped unless `DATABASE_URL` is set.
 
 ---
 
@@ -332,7 +347,13 @@ Break these and the design stops working. Each was argued through, not defaulted
    document and eat undo slots for something nobody wants to undo. Same reasoning as the
    graph index: derived or ephemeral things stay out of the saved file. `deckStore.test.ts`
    guards this for the view state.
-
+9. **Docker files belong to the owner.** Agents do not create a Dockerfile, compose file
+   or any other container config. Where MySQL (or anything else) runs is the owner's
+   decision; code reads `DATABASE_URL` and assumes nothing else.
+10. **The accounts backend stays optional.** `src/` never imports from `server/`, and no
+    editor feature may depend on being signed in or on the backend being up. Auth DB
+    changes go through a new Drizzle migration in `server/api/migrations/`, never an edit
+    to a committed one.
 
 ---
 
@@ -478,6 +499,17 @@ src/
 │                     useDeckAssets, useFullscreen} · (song-study screens)
 ├── theory/ graph/    song-study: roman numerals, Booth's rotation, n-grams, edges
 └── types/            ambient .d.ts only (Vite env)
+
+server/
+├── ug/               chord agent's local service (127.0.0.1:4318)
+└── api/              optional accounts backend (127.0.0.1:4319)
+    ├── app.ts        buildApp({store}) — routes, cookie flags, rate limit, health
+    ├── auth.ts       argon2id, 30-day sessions, dummy-hash verify for unknown users
+    ├── rules.ts      the one Zod schema for username/password
+    ├── store.ts      AuthStore interface + MemoryStore (the tests' fake)
+    ├── db.ts · schema.ts   MySqlStore + Drizzle tables (users, sessions)
+    ├── migrations/   committed SQL from drizzle-kit
+    └── server.ts · migrate.ts · config.ts
 ```
 
 ### On disk
