@@ -348,7 +348,7 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 453 tests
+npm test           # vitest — 515 tests
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build
 ```
@@ -433,6 +433,11 @@ Break these and the design stops working. Each was argued through, not defaulted
   (`field.style.width = "1px"` before reading `scrollWidth`): without it, `scrollWidth` on
   an already-wide box just reports that same width back once short content no longer
   overflows it, so the box could grow but never shrink back down.
+  **The collapse must be undone straight after reading** (`measureEditor.ts`). React writes
+  a style only when the value it renders changes, and a keystroke that leaves the box size
+  alone renders the same value — so a `1px` width or `auto` height left by measuring stayed
+  in the DOM, blanking a tab and cutting every editor to two rows (#33). It looked
+  palette-specific only because a bend insert is a single, visible action.
 - **Clipping and shrink-to-fit are two different bugs that look identical from a
   screenshot.** Both of the traps above are about the *editing* overlay growing to keep
   content visible while typing. Resizing a box *without* entering edit mode (drag a handle
