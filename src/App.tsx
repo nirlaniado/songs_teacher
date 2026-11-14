@@ -5,6 +5,7 @@ import { DeckLibraryScreen } from "./components/DeckLibraryScreen.js";
 import { DeckScreen } from "./components/DeckScreen.js";
 import { LibraryScreen } from "./components/LibraryScreen.js";
 import { SongScreen } from "./components/SongScreen.js";
+import { Button } from "./components/controls.js";
 
 // Cytoscape (+ fcose) is the heaviest dependency in the app and is only ever
 // needed on the graph screen — code-split it out of the main bundle instead
@@ -75,15 +76,14 @@ export default function App() {
               it. Chrome, Edge, or Brave keep everything as real files on disk.
             </p>
           )}
-          <button
+          <Button variant="primary" size="lg"
             onClick={() => void attach()}
             disabled={attaching}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-fg disabled:opacity-50"
           >
             {attaching ? "Opening…" : usingFallbackStorage ? "Get started" : "Open folder"}
-          </button>
+          </Button>
           {error && <p className="max-w-sm text-center text-xs text-danger">{error}</p>}
-          <button onClick={() => setScreen("ug")} className="mt-3 text-sm text-accent-light hover:text-fg">סוכן אקורדים · Ultimate Guitar</button>
+          <Button variant="subtle" className="mt-3" onClick={() => setScreen("ug")}>סוכן אקורדים · Ultimate Guitar</Button>
         </div>
       </Centered>
     );
@@ -110,12 +110,11 @@ export default function App() {
     return (
       <div>
         <div className="border-b border-line px-6 py-2">
-          <button
+          <Button variant="subtle" size="sm"
             onClick={() => setScreen("decks")}
-            className="text-xs text-faint hover:text-muted"
           >
             ← Presentations
-          </button>
+          </Button>
         </div>
         <LibraryScreen onViewGraph={() => setScreen("graph")} />
       </div>
@@ -126,13 +125,12 @@ export default function App() {
     <div>
       <DeckLibraryScreen onOpen={() => setScreen("editor")} />
       <div className="mx-auto flex max-w-3xl gap-6 px-10 pb-10">
-        <button onClick={() => setScreen("ug")} className="text-xs text-accent-light hover:text-fg">סוכן אקורדים · Ultimate Guitar</button>
-        <button
+        <Button variant="subtle" size="sm" onClick={() => setScreen("ug")}>סוכן אקורדים · Ultimate Guitar</Button>
+        <Button variant="subtle" size="sm"
           onClick={() => setScreen("songs")}
-          className="text-xs text-faint hover:text-muted"
         >
           Song study tools →
-        </button>
+        </Button>
       </div>
     </div>
   );

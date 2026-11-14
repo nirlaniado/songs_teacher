@@ -25,7 +25,7 @@ export function ChordChart({ block, effectiveKey }: { block: ChordChartBlock; ef
         return (
           <div
             key={i}
-            className="relative flex h-20 overflow-hidden rounded-md border border-line bg-panel"
+            className="relative flex h-20 overflow-hidden rounded-surface border border-line bg-panel"
           >
             {bar.chords.map((chord, j) => (
               <div

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useLibraryStore } from "../store/libraryStore.js";
 import type { KeyRef, Mode } from "../schema/song.js";
+import { Button, Field } from "./controls.js";
 
 const MODES: Mode[] = [
   "major",
@@ -58,27 +59,26 @@ export function LibraryScreen({ onViewGraph }: { onViewGraph: () => void }) {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-fg">Library</h1>
         <div className="flex items-center gap-4">
-          <button onClick={onViewGraph} className="text-sm text-accent-light hover:text-fg">
+          <Button variant="subtle" onClick={onViewGraph}>
             Harmonic graph →
-          </button>
-          <button
+          </Button>
+          <Button variant="subtle"
             onClick={() => void detach()}
-            className="text-sm text-faint hover:text-muted"
           >
             Close library
-          </button>
+          </Button>
         </div>
       </div>
 
       {error && (
-        <p className="mb-4 rounded border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
+        <p className="mb-4 rounded-control border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
       <form
         onSubmit={handleImport}
-        className="mb-8 rounded-lg border border-line bg-panel p-4"
+        className="mb-8 rounded-surface border border-line bg-panel p-4"
       >
         <div className="mb-3">
           <h2 className="text-sm font-medium text-muted">Add a song</h2>
@@ -96,48 +96,38 @@ export function LibraryScreen({ onViewGraph }: { onViewGraph: () => void }) {
                 setFile(f);
                 if (f && !title) setTitle(titleFromFilename(f.name));
               }}
-              className="text-sm text-muted file:mr-2 file:rounded file:border-0 file:bg-raised file:px-2 file:py-1 file:text-fg"
+              className="text-sm text-muted file:mr-2 file:rounded-control file:border-0 file:bg-raised file:px-2 file:py-1 file:text-fg"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-faint">
             Title
-            <input
+            <Field
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Song title"
-              className="w-48 rounded border border-line bg-canvas px-2 py-1 text-sm"
+              className="w-48"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-faint">
             Key
-            <input
-              value={tonic}
-              onChange={(e) => setTonic(e.target.value)}
-              placeholder="C"
-              className="w-16 rounded border border-line bg-canvas px-2 py-1 text-sm"
-            />
+            <Field value={tonic} onChange={(e) => setTonic(e.target.value)} placeholder="C" className="w-16" />
           </label>
           <label className="flex flex-col gap-1 text-xs text-faint">
             Mode
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
-              className="rounded border border-line bg-canvas px-2 py-1 text-sm"
-            >
+            <Field as="select" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
               {MODES.map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
               ))}
-            </select>
+            </Field>
           </label>
-          <button
+          <Button variant="primary"
             type="submit"
             disabled={!file || title.trim() === "" || importing}
-            className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:cursor-not-allowed disabled:bg-raised disabled:text-faint"
           >
             {importing ? "Adding…" : "Add"}
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -146,7 +136,7 @@ export function LibraryScreen({ onViewGraph }: { onViewGraph: () => void }) {
       {!loadingSongs && songs.length === 0 && (
         <p className="text-sm text-faint">No songs yet — add one above.</p>
       )}
-      <ul className="divide-y divide-line rounded-lg border border-line">
+      <ul className="divide-y divide-line rounded-surface border border-line">
         {songs.map((song) => (
           <li key={song.id} className="flex items-center justify-between px-4 py-3">
             <button
@@ -160,26 +150,25 @@ export function LibraryScreen({ onViewGraph }: { onViewGraph: () => void }) {
               {!song.hasAudio && (
                 <span
                   title="This song has no audio file — see its notes."
-                  className="rounded bg-warning-soft px-1.5 py-0.5 text-[10px] text-warning"
+                  className="rounded-control bg-warning-soft px-1.5 py-0.5 text-[10px] text-warning"
                 >
                   no audio
                 </span>
               )}
               {song.tags.map((t) => (
-                <span key={t} className="rounded bg-raised px-1.5 py-0.5 text-[10px] text-muted">
+                <span key={t} className="rounded-control bg-raised px-1.5 py-0.5 text-[10px] text-muted">
                   {t}
                 </span>
               ))}
-              <button
+              <Button variant="destructive-subtle" size="sm"
                 onClick={() => {
                   if (confirm(`Delete "${song.title}"? This cannot be undone.`)) {
                     void deleteSong(song.id);
                   }
                 }}
-                className="text-xs text-faint hover:text-danger"
               >
                 Delete
-              </button>
+              </Button>
             </div>
           </li>
         ))}
