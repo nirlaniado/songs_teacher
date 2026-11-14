@@ -11,9 +11,9 @@ import { SlidePanel } from "./SlidePanel.js";
 import { SlideRenderer } from "./SlideRenderer.js";
 
 // Hard rule 0: one renderer, mounted at several scales, must draw the same slide everywhere. These mount the real
-// parents under the app's compiled stylesheet and compare every computed style jsdom resolves — selector matches,
-// inheritance, `::after` — for SlideRenderer's surface, its scaled layer and the slide's content, against the same
-// slide rendered on its own at the same scale. jsdom does no layout and no painting: what a box ends up measuring,
+// parents under the app's compiled stylesheet and compare every computed style jsdom resolves (selector matches and
+// inheritance) for SlideRenderer's surface, its scaled layer and each node of the slide's content, every one with its
+// `::before` and `::after`, against the same slide rendered on its own at the same scale. jsdom does no layout and no painting: what a box ends up measuring,
 // what overlaps what and in which order things paint are out of reach here.
 //
 // The canvas and Present size the slide to their own box, read with getBoundingClientRect, which jsdom always
@@ -130,17 +130,27 @@ describe("a slide looks the same in every place it is mounted", () => {
   });
 
   it.each([
-    [".slide-thumb img { opacity: .5 }", /^layer>.*>img\[0\] opacity: 1 -> 0\.5$/],
-    [".slide-thumb .ring-line { opacity: .5 }", /^surface opacity: 1 -> 0\.5$/],
-  ])("would notice %s reaching into a mounted slide", async (rule, difference) => {
+    [".slide-thumb img { opacity: .5 }", [/^layer>.*>img\[0\] opacity: 1 -> 0\.5$/]],
+    [".slide-thumb .ring-line { opacity: .5 }", [/^surface opacity: 1 -> 0\.5$/]],
+    // A custom property set on the surface and read only by a pseudo-element: the overlay it draws shows
+    // up nowhere but in that pseudo-element's own computed style (#47).
+    [
+      `.slide-thumb .ring-line { --leak-opacity: .5 }
+       .ring-line::after { content: ""; position: absolute; inset: 0; background: black; opacity: var(--leak-opacity, 0) }`,
+      // The custom property is inherited, so every node below the surface reports it too; the overlay itself
+      // is the surface's ::after opacity, which must be among the differences.
+      [/^surface::after opacity: 0 -> 0\.5$/, /^(surface|layer)\S* --leak-opacity: undefined -> \.5$/],
+    ],
+    [".slide-thumb .ring-line > div > div::before { content: \"!\" }", [/^layer>div\[\d+\]::before content: none -> "!"$/]],
+  ] as const)("would notice %s reaching into a mounted slide", async (rule, expected) => {
     const leak = document.createElement("style");
     leak.textContent = rule;
     document.head.append(leak);
     try {
       const { got, reference } = await mounted(MOUNTS[0][2]);
       const differences = appearanceDifferences(reference, got);
-      expect(differences).toHaveLength(1);
-      expect(differences[0]).toMatch(difference);
+      expect(differences.filter((d) => !expected.some((re) => re.test(d)))).toEqual([]);
+      for (const re of expected) expect(differences.some((d) => re.test(d)), String(re)).toBe(true);
     } finally {
       leak.remove();
     }

@@ -348,7 +348,7 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 530 tests
+npm test           # vitest — 532 tests
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build
 ```
@@ -504,9 +504,13 @@ Break these and the design stops working. Each was argued through, not defaulted
   root — the only inherited property shown to reach a slide visibly; don't add speculative
   resets beside it. `SlideRenderer.mounts.test.tsx` mounts the real rail, canvas, Present and
   library rows and cards under the compiled stylesheet. It compares the computed styles jsdom
-  resolves — selector matches, inheritance, `::after` — for the renderer's surface, its scaled
-  layer and the slide's content against the same slide drawn on its own at the same scale, and
-  asserts each mount's scale (surface 1280·s × 720·s, `scale(s)`). jsdom does no layout or
+  resolves (selector matches and inheritance) for the renderer's surface, its scaled layer and
+  every node of the slide's content, each with its own `::before` and `::after`, against the same
+  slide drawn on its own at the same scale, and asserts each mount's scale (surface 1280·s ×
+  720·s, `scale(s)`). Differences it ignores are named in `appearanceDifferences`
+  (`src/test/dom.ts`): interaction-only properties, list styles off list items, and the
+  library row's own `--row-wash`. Any other custom property is compared, because a mount rule
+  can set one on the surface and read it in a pseudo-element (#47). jsdom does no layout or
   painting, so final box sizes, overlap and paint order are not covered; the canvas and Present
   scales come from a stubbed `getBoundingClientRect`.
 - **The usual checks can't see what paints over a slide.** A thumbnail overhangs its button
