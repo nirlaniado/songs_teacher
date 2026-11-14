@@ -27,7 +27,7 @@ describe("the chord agent speaks one language", () => {
   it("scans every file under src and server, skipping only known binary formats", () => {
     expect(textFiles.map(f => f.file)).toEqual(expect.arrayContaining([
       join("src", "index.css"), join("src", "example", "song.example.json"), join("src", "theory", "rotation.test.ts"),
-      join("src", "components", "deck", "__snapshots__", "SlideRenderer.test.ts.snap"), join("server", "ug", "messages.test.ts"),
+      join("src", "components", "deck", "SlideRenderer.mounts.test.tsx"), join("server", "ug", "messages.test.ts"),
     ]));
     // A text file in another encoding fails to decode too, so a skip has to be a recognised format or it could hide anything.
     expect(skipped.filter(file => !BINARY_FORMAT.test(file))).toEqual([]);
