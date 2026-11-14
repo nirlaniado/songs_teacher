@@ -60,11 +60,13 @@ describe("SlideRenderer draws a slide the same at every scale", () => {
     ["thumbnail", 0.115],
     ["canvas", 0.6],
     ["Present", 1.125],
+    ["library row", 0.1],
+    ["library card", 0.125],
   ])("at %s scale", (_mount, scale) => {
     expect(render(slide, theme, scale)).toMatchSnapshot();
   });
 
-  it.each([0.115, 0.6, 1.125])("carries no control class, radius or motion at scale %s", (scale) => {
+  it.each([0.1, 0.115, 0.125, 0.6, 1.125])("carries no control class, radius or motion at scale %s", (scale) => {
     const classes = [...render(slide, theme, scale).matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/));
     expect(classes.filter((c) => /^(control|field|menu-item|tile|row|pop|fade|panel-rise|rounded|transition|animate)/.test(c))).toEqual([]);
     expect(render(slide, theme, scale)).not.toMatch(/transition|animation|var\(--(motion|radius|press|enter)/);
