@@ -348,7 +348,7 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 515 tests
+npm test           # vitest — 528 tests
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build
 ```
@@ -496,6 +496,15 @@ Break these and the design stops working. Each was argued through, not defaulted
   every graph edge derived from that section.
 - **Don't put `currentTime` in React state**, and don't use `timeupdate` (see the stack
   table).
+- **A mount point's inherited styles reach the slide.** Inherited properties cross into
+  `SlideRenderer` from whatever it is mounted in. The thumbnail rail mounts slides inside a
+  `<button>`, which centres its content, and a tab element sets no alignment of its own, so
+  its text drew centred in the rail and left-aligned on the canvas and in Present. Fixed by
+  pinning `text-align` on the renderer's root — the only inherited property shown to reach a
+  slide visibly; don't add speculative resets beside it. `SlideRenderer.mounts.test.tsx`
+  mounts the real rail, canvas, Present and library card under the compiled stylesheet and
+  compares every computed style of the slide against the slide drawn on its own, so a new
+  mount point or element kind that inherits something visible fails there.
 - **The usual checks can't see what paints over a slide.** A thumbnail overhangs its button
   by a few pixels, and a selection ring at `z-index: 0` drew across the slide there, where
   the old border had painted behind it. The markup snapshot and every computed style stayed
