@@ -40,7 +40,26 @@ function stamping() {
   };
   return { run, inputs, calls: () => calls };
 }
-const noise = (n: number) => Float32Array.from({ length: n }, (_, i) => Math.sin(i * 0.37) * 0.3 + Math.sin(i * 0.011) * 0.5 + 0.1);
+// The long cases below cover millions of samples and thousands of frames, so this scaffolding avoids
+// per-element callbacks and per-element `expect`s: those cost seconds, which timed the file out under load (#14).
+function noise(n: number) {
+  const x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = Math.sin(i * 0.37) * 0.3 + Math.sin(i * 0.011) * 0.5 + 0.1;
+  return x;
+}
+/** `toEqual` for float arrays (same `Object.is` per element), reporting the first difference instead of walking a generic diff. */
+function expectSameFloats(actual: Float32Array, expected: Float32Array) {
+  let first = -1;
+  for (let i = 0; i < Math.min(actual.length, expected.length) && first < 0; i++) if (!Object.is(actual[i], expected[i])) first = i;
+  const at = first < 0 ? null : { index: first, actual: actual[first], expected: expected[first] };
+  expect({ length: actual.length, firstDifference: at }).toEqual({ length: expected.length, firstDifference: null });
+}
+/** Frames in [0, n) failing `check`, the first few of them — one assertion instead of one per frame. */
+function failingFrames(n: number, check: (g: number) => boolean) {
+  const bad: number[] = [];
+  for (let g = 0; g < n && bad.length < 5; g++) if (!check(g)) bad.push(g);
+  return bad;
+}
 
 describe("framesFor", () => {
   it("matches the conv stack's 400-sample receptive field and 320-sample stride", () => {
@@ -104,19 +123,18 @@ describe("emissionsFor", () => {
     expect(at(1400)).toEqual({ chunk: 1, local: 100 });
     expect(at(2699)).toEqual({ chunk: 1, local: 1399 });
     expect(at(2700)).toEqual({ chunk: 2, local: 100 });
-    for (let g = 0; g < e.frames; g++) {
-      const { chunk, local } = at(g);
-      expect(chunk * 1300 + local).toBe(g);
-      expect(e.logits[g * V + 31]).toBe(31);
-    }
+    expect(failingFrames(e.frames, (g) => { const { chunk, local } = at(g); return chunk * 1300 + local === g && e.logits[g * V + 31] === 31; })).toEqual([]);
   });
 
-  it("produces exactly the frames the waveform implies, divisible by the chunk size or not", async () => {
+  // Inherently long: the 241-second case is what catches a stitch error that only shows after many
+  // chunks, and normalising and stitching 7.2M samples is production work (about 0.9s idle). Under a
+  // loaded gate that passes 5s, so it gets room rather than a shorter song (#14).
+  it("produces exactly the frames the waveform implies, divisible by the chunk size or not", { timeout: 20_000 }, async () => {
     for (const n of [2 * CHUNK, 2 * CHUNK + 123, 3 * CHUNK - 1, 241 * SECONDS + 7]) {
       const e = await emissionsFor(noise(n), undefined, stamping().run);
       expect(e.frames).toBe(Math.floor((n - 400) / 320) + 1);
       expect(e.logits.length).toBe(e.frames * V);
-      for (let g = 0; g < e.frames; g++) expect(e.logits[g * V + 1]).toBe(1);
+      expect(failingFrames(e.frames, (g) => e.logits[g * V + 1] === 1)).toEqual([]);
     }
   });
 
@@ -125,8 +143,8 @@ describe("emissionsFor", () => {
     const fake = stamping();
     const e = await emissionsFor(samples, undefined, fake.run);
     expect(fake.calls()).toBe(1);
-    expect(fake.inputs[0]).toEqual(normalize(samples));
-    expect(e.logits).toEqual((await stamping().run(normalize(samples))).logits);
+    expectSameFloats(fake.inputs[0]!, normalize(samples));
+    expectSameFloats(e.logits, (await stamping().run(normalize(samples))).logits);
     expect(e.secondsPerFrame).toBe(0.02);
   });
 
@@ -222,13 +240,18 @@ describe("onnxSession off the page's thread", () => {
         while (Date.now() < until);
         parentPort.postMessage({ id, logits: new Float32Array(2 * ${V}), frames: 2 });
       });`, { eval: true });
-    const state = { busy: false, exited: new Promise<void>((resolve) => thread.once("exit", () => resolve())) };
+    let markStarted = () => {};
+    const state = {
+      busy: false,
+      started: new Promise<void>((resolve) => (markStarted = resolve)),
+      exited: new Promise<void>((resolve) => thread.once("exit", () => resolve())),
+    };
     const worker = {
       onmessage: null as ((e: { data: AlignReply }) => void) | null, onerror: null,
       postMessage: (m: AlignRequest, transfer: ArrayBuffer[]) => thread.postMessage(m, transfer),
       terminate: () => void thread.terminate(),
     };
-    thread.on("message", (data: AlignReply) => { if (data.id === -1) state.busy = true; else worker.onmessage?.({ data }); });
+    thread.on("message", (data: AlignReply) => { if (data.id === -1) { state.busy = true; markStarted(); } else worker.onmessage?.({ data }); });
     return { spawn: () => worker as unknown as AlignWorker, state };
   }
 
@@ -244,11 +267,16 @@ describe("onnxSession off the page's thread", () => {
     return () => worker as unknown as AlignWorker;
   }
 
-  /** Starts a chunk, asks to cancel 200 ms in, and measures how late that request ran and how long the chunk took to give up. */
-  async function cancelDuringChunk(spawn: () => AlignWorker) {
+  /**
+   * Starts a chunk, asks to cancel 200 ms into it, and measures how late that request ran and how long the
+   * chunk took to give up. `started` is when the chunk began: on a loaded machine a worker thread can take
+   * longer than 200 ms just to spin up, and a cancel before the chunk proves nothing about one during it (#14).
+   */
+  async function cancelDuringChunk(spawn: () => AlignWorker, started?: Promise<void>) {
     const controller = new AbortController();
-    const t0 = performance.now();
     const outcome = onnxSession(undefined, "model", controller.signal, spawn)(new Float32Array(720)).then(() => "finished", (e: Error) => e.name);
+    await started;
+    const t0 = performance.now();
     let firedAt = 0;
     setTimeout(() => { firedAt = performance.now(); controller.abort(); }, 200);
     const result = await outcome;
@@ -257,7 +285,7 @@ describe("onnxSession off the page's thread", () => {
 
   it("keeps the page's thread free while a chunk blocks, and a cancel during it ends it at once", async () => {
     const { spawn, state } = blockingThread();
-    const probe = await cancelDuringChunk(spawn);
+    const probe = await cancelDuringChunk(spawn, state.started);
     expect(state.busy).toBe(true);
     expect(probe.result).toBe("AbortError");
     expect(probe.timerLate).toBeLessThan(150);
