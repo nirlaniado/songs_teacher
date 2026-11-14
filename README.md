@@ -150,9 +150,13 @@ for 15 minutes after 5 failed logins from any IP.
 
 Behind a proxy, set `TRUST_PROXY` (see `.env.example`) — `loopback` for the Vite proxy on
 the same machine, plus a TLS terminator's address if there is one. That is what lets the
-API see the real client IP and know the request was HTTPS. The Vite proxy appends the
-client to `X-Forwarded-For` and keeps an upstream `X-Forwarded-Proto`/`Host` rather than
-overwriting them. A public hostname in front of Vite also needs Vite's `server.allowedHosts`.
+API see the real client IP and know the request was HTTPS. It takes only explicit IPs,
+CIDRs and the names `loopback`, `linklocal` and `uniquelocal`; `true`, hop counts and `/0`
+are refused at startup, because trusting every hop lets a client forge its IP past the
+rate limit. The Vite proxy reads the same setting: from a trusted upstream it keeps
+`X-Forwarded-Proto`/`Host` and extends `X-Forwarded-For`; from anyone else it discards
+them and reports its own connection. A public hostname in front of Vite also needs Vite's
+`server.allowedHosts`.
 
 After changing `server/api/schema.ts`, run `npm run api:generate` to write a new migration
 and commit it. `npm test` needs no database; the MySQL store's own test runs only when

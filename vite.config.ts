@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { trustProxy } from "./server/api/config";
 import { apiProxy } from "./server/api/proxy";
 
 /**
@@ -22,8 +23,8 @@ const crossOriginIsolation = {
 
 const proxy = {
   "/api/ug": "http://127.0.0.1:4318",
-  "/api/auth": apiProxy(),
-  "/api/health": apiProxy(),
+  "/api/auth": apiProxy(trustProxy()),
+  "/api/health": apiProxy(trustProxy()),
 };
 
 // Vitest reads this file too (`npm test` = `vitest run`). The existing

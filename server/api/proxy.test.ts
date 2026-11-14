@@ -12,7 +12,7 @@ const plain: Hasher = { hash: async (p) => `h:${p}`, verify: async (h, p) => h =
 // The API behind a real Vite dev-server proxy, configured as vite.config.ts does it. Linux routes
 // all of 127.0.0.0/8 to loopback, so clients get distinct addresses: 127.0.0.4 plays a trusted
 // TLS terminator in front of Vite, 127.0.0.2/.3 are clients reaching Vite directly.
-const TRUSTED = "127.0.0.1, 127.0.0.4";
+const TRUSTED = ["127.0.0.1", "127.0.0.4"];
 const TERMINATOR = "127.0.0.4";
 describe("accounts API behind the Vite proxy", () => {
   let api: Awaited<ReturnType<typeof buildApp>>;
@@ -26,7 +26,7 @@ describe("accounts API behind the Vite proxy", () => {
     const target = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}`;
     vite = await createServer({
       configFile: false, logLevel: "silent", appType: "custom", optimizeDeps: { noDiscovery: true, include: [] },
-      server: { host: "127.0.0.1", port: 0, allowedHosts: true, proxy: { "/api/auth": apiProxy(target) }, hmr: false, watch: null },
+      server: { host: "127.0.0.1", port: 0, allowedHosts: true, proxy: { "/api/auth": apiProxy(TRUSTED, target) }, hmr: false, watch: null },
     });
     await vite.listen();
     port = (vite.httpServer!.address() as AddressInfo).port;
@@ -55,8 +55,11 @@ describe("accounts API behind the Vite proxy", () => {
   });
 
   it("leaves Secure off for plain HTTP, whatever the Host", async () => {
-    expect((await signup({ host: "teacher.example.com" }, "127.0.0.2")).cookie).not.toMatch(/Secure/);
-    expect((await signup({ host: "localhost:5173" }, "127.0.0.2")).cookie).not.toMatch(/Secure/);
+    for (const host of ["teacher.example.com", "localhost:5173"]) {
+      const res = await signup({ host }, "127.0.0.10");
+      expect(res.status).toBe(201);
+      expect(res.cookie).not.toMatch(/Secure/);
+    }
   });
 
   it("gives two clients behind the terminator separate rate limits", async () => {
@@ -73,5 +76,22 @@ describe("accounts API behind the Vite proxy", () => {
   it("doesn't let a direct client dodge the limit by forging X-Forwarded-For", async () => {
     const forged = (ip: string) => login("127.0.0.5", { "x-forwarded-for": ip });
     expect([await forged("198.51.100.1"), await forged("198.51.100.2"), await forged("198.51.100.3")]).toEqual([401, 401, 429]);
+  });
+
+  it("ignores forged X-Forwarded-Proto from an untrusted client", async () => {
+    const forged = await signup({ "x-forwarded-proto": "https" }, "127.0.0.8");
+    expect(forged.status).toBe(201);
+    expect(forged.cookie).not.toMatch(/Secure/);
+    const withHost = await signup({ "x-forwarded-proto": "https", "x-forwarded-host": "teacher.example.com" }, "127.0.0.9");
+    expect(withHost.status).toBe(201);
+    expect(withHost.cookie).not.toMatch(/Secure/);
+  });
+
+  it("keys an untrusted client's limit on its own address, not a forged chain", async () => {
+    // 127.0.0.6 claims to be 203.0.113.9 (another client) and also claims HTTPS; neither sticks.
+    const forged = () => login("127.0.0.6", { "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https" });
+    expect([await forged(), await forged(), await forged()]).toEqual([401, 401, 429]);
+    expect(await login(TERMINATOR, { "x-forwarded-for": "203.0.113.9" })).toBe(401);
+    expect(await login("127.0.0.7")).toBe(401);
   });
 });

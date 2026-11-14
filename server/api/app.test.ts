@@ -54,13 +54,13 @@ describe("auth API", () => {
   it("marks the cookie Secure from the original protocol, not the Host header", async () => {
     const signup = (app: Awaited<ReturnType<typeof setup>>["app"], username: string, headers: Record<string, string>) =>
       app.inject({ method: "POST", url: "/api/auth/signup", payload: { ...creds, username }, headers }).then((r) => String(r.headers["set-cookie"]));
-    const { app: trusting } = await setup({ trustProxy: "loopback" });
+    const { app: trusting } = await setup({ trustProxy: ["loopback"] });
     expect(await signup(trusting, "user1", { "x-forwarded-proto": "https", host: "127.0.0.1:4319" })).toMatch(/Secure/);
     expect(await signup(trusting, "user2", { "x-forwarded-proto": "http", host: "teacher.example.com" })).not.toMatch(/Secure/);
     expect(await signup(trusting, "user3", { host: "teacher.example.com" })).not.toMatch(/Secure/);
     const { app: untrusting } = await setup();
     expect(await signup(untrusting, "user4", { "x-forwarded-proto": "https" })).not.toMatch(/Secure/);
-    const { app: wrongProxy } = await setup({ trustProxy: "10.0.0.1" });
+    const { app: wrongProxy } = await setup({ trustProxy: ["10.0.0.1"] });
     expect(await signup(wrongProxy, "user5", { "x-forwarded-proto": "https" })).not.toMatch(/Secure/);
   });
 
@@ -115,7 +115,7 @@ describe("auth API", () => {
     expect([await login(direct, a), await login(direct, a), await login(direct, a)]).toEqual([401, 401, 429]);
     expect(await login(direct, b)).toBe(401);
 
-    const { app: proxied } = await setup({ ...limit, trustProxy: "loopback" });
+    const { app: proxied } = await setup({ ...limit, trustProxy: ["loopback"] });
     const viaProxy = (ip: string) => ({ remoteAddress: "127.0.0.1", headers: { "x-forwarded-for": ip } });
     expect([await login(proxied, viaProxy("203.0.113.1")), await login(proxied, viaProxy("203.0.113.1")), await login(proxied, viaProxy("203.0.113.1"))]).toEqual([401, 401, 429]);
     expect(await login(proxied, viaProxy("203.0.113.2"))).toBe(401);

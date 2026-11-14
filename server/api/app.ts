@@ -23,7 +23,7 @@ export interface AppOptions {
 }
 
 export async function buildApp(options: AppOptions) {
-  const app = Fastify({ logger: options.logger ?? false, bodyLimit: 8192, trustProxy: options.trustProxy ?? false });
+  const app = Fastify({ logger: options.logger ?? false, bodyLimit: 8192, trustProxy: options.trustProxy?.length ? options.trustProxy : false });
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
   const limit = { rateLimit: options.rateLimit ?? { max: 10, timeWindow: 60_000 } };

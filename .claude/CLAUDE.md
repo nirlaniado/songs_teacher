@@ -355,7 +355,7 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 487 tests; needs no database
+npm test           # vitest — 501 tests; needs no database
 npm run typecheck  # app, chord agent and accounts backend tsconfigs
 npm run build      # typecheck + production build
 npm run api:server   # accounts backend on 127.0.0.1:4319 (needs DATABASE_URL)
@@ -507,8 +507,15 @@ Break these and the design stops working. Each was argued through, not defaulted
   `X-Forwarded-*` only from a trusted hop. Deciding `Secure` from the Host header was the
   first attempt and was wrong: Vite's string proxy rewrites Host to `127.0.0.1`. Fastify reads
   the *last* `X-Forwarded-Proto` entry, so the Vite proxy must not append its own `http`
-  after a TLS terminator's `https` — which is why it isn't plain `xfwd: true`.
-  `proxy.test.ts` runs a real Vite proxy and fails for both the string form and `xfwd`.
+  after a TLS terminator's `https` — which is why it isn't plain `xfwd: true`. Keeping
+  upstream values is only safe from a trusted peer: the API trusts the Vite hop, so Vite
+  relaying a caller's forged `X-Forwarded-Proto` would launder it. `apiProxy()` therefore
+  takes the same `TRUST_PROXY` list and discards forwarded headers from anyone not on it.
+  `TRUST_PROXY` refuses `true`, hop counts and `/0`: trusting every hop lets a caller forge
+  `X-Forwarded-For` past the IP limit. `proxy.test.ts` runs a real Vite proxy and fails for
+  the string form, `xfwd`, and a proxy that relays an untrusted caller's headers. Its
+  negative cases assert the request succeeded first — an earlier version checked "no
+  `Secure`" on responses that had been rate-limited, which passed for the wrong reason.
 - **Don't put `currentTime` in React state**, and don't use `timeupdate` (see the stack
   table).
 - **The usual checks can't see what paints over a slide.** A thumbnail overhangs its button
@@ -577,7 +584,7 @@ server/
     ├── app.ts        buildApp({store}) — routes, cookie flags, rate limit, health
     ├── auth.ts       argon2id, 30-day sessions, dummy-hash verify for unknown users
     ├── throttle.ts   per-username lockout: 5 failed logins → 15 min, from any IP
-    ├── proxy.ts      Vite proxy entry: appends X-Forwarded-For, keeps upstream -Proto/-Host
+    ├── proxy.ts      Vite proxy entry: relays X-Forwarded-* only from a TRUST_PROXY peer
     ├── rules.ts      the one Zod schema for username/password
     ├── store.ts      AuthStore interface + MemoryStore (the tests' fake)
     ├── db.ts · schema.ts   MySqlStore + Drizzle tables (users, sessions)
