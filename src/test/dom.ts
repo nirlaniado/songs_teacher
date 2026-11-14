@@ -82,13 +82,20 @@ type Node = { path: string; style: Record<string, string> };
 /**
  * Computed styles for a mounted slide: SlideRenderer's outer surface (its on-screen size, and whatever a
  * mount's stylesheet does to it), the inner 1280×720 layer (with its scale transform), and the slide's own
- * content — the first `count` children of the layer and everything inside them. Editor chrome, which the
- * canvas adds after the content, is not compared.
+ * content — the first `count` children of the layer and everything inside them. Each of those nodes also
+ * contributes its `::before` and `::after`, since a mount's rule can draw through a pseudo-element without
+ * touching the node's own style. Editor chrome, which the canvas adds after the content, is not compared.
  */
 export function slideStyles(layer: HTMLElement, count: number): Node[] {
-  const out: Node[] = [{ path: "surface", style: computed(layer.parentElement!) }, { path: "layer", style: computed(layer) }];
-  const walk = (el: Element, path: string) => {
+  const out: Node[] = [];
+  const add = (el: Element, path: string) => {
     out.push({ path, style: computed(el) });
+    for (const pseudo of ["::before", "::after"]) out.push({ path: path + pseudo, style: computed(el, pseudo) });
+  };
+  add(layer.parentElement!, "surface");
+  add(layer, "layer");
+  const walk = (el: Element, path: string) => {
+    add(el, path);
     [...el.children].forEach((child, i) => walk(child, `${path}>${child.tagName.toLowerCase()}[${i}]`));
   };
   [...layer.children].slice(0, count).forEach((child, i) => walk(child, `layer>${child.tagName.toLowerCase()}[${i}]`));
@@ -105,10 +112,11 @@ export function slideScale(layer: HTMLElement) {
  *
  * A mount's ancestors pass inherited properties down, and some cannot change how this content looks:
  * `pointer-events` and `cursor` are interaction, not appearance; `list-style-*` only draws on list items,
- * which is checked here rather than assumed; and a custom property (`--*`) is never drawn itself — jsdom
- * resolves var() in computed values, so a property that read it would differ, and is compared in its own
- * right. `text-align` is not excused:
- * the rail's <button> once centred a tab's text through it, which SlideRenderer now pins at its root.
+ * which is checked here rather than assumed. One custom property is excused by name: `--row-wash`, which the
+ * library's clickable row sets for its own hover wash and nothing in a slide reads. Any other custom property
+ * that differs is reported, because a rule can read one in a pseudo-element or anywhere else (#47).
+ * `text-align` is not excused: the rail's <button> once centred a tab's text through it, which SlideRenderer
+ * now pins at its root.
  */
 export function appearanceDifferences(reference: Node[], got: Node[]): string[] {
   const out: string[] = [];
@@ -119,7 +127,7 @@ export function appearanceDifferences(reference: Node[], got: Node[]): string[] 
     for (const p of new Set([...Object.keys(r.style), ...Object.keys(g.style)])) {
       if (r.style[p] === g.style[p]) continue;
       if (p === "pointer-events" || p === "cursor") continue;
-      if (p.startsWith("--")) continue;
+      if (p === "--row-wash") continue;
       if (p.startsWith("list-style") && g.style.display !== "list-item") continue;
       out.push(`${r.path} ${p}: ${r.style[p]} -> ${g.style[p]}`);
     }
