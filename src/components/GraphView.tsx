@@ -6,6 +6,7 @@ import { useLibraryStore } from "../store/libraryStore.js";
 import { topKPerNode, type GraphEdge, type GraphNode } from "../graph/index.js";
 import { EDGE_TYPE_RANK } from "../graph/types.js";
 import { cssColor } from "./cssColor.js";
+import { Button } from "./controls.js";
 
 cytoscape.use(fcose);
 
@@ -154,22 +155,21 @@ export function GraphView({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-screen flex-col">
       <div className="flex items-center justify-between border-b border-line px-6 py-3">
-        <button onClick={onBack} className="text-sm text-faint hover:text-muted">
+        <Button variant="subtle" onClick={onBack}>
           ← Library
-        </button>
+        </Button>
         <h1 className="text-lg font-semibold text-fg">Harmonic graph</h1>
-        <button
+        <Button
           onClick={() => void build()}
           disabled={loading}
-          className="rounded bg-raised px-3 py-1 text-sm text-fg disabled:opacity-40"
         >
           {loading ? "Building…" : "Rebuild"}
-        </button>
+        </Button>
       </div>
 
       <div className="relative flex-1">
         {error && (
-          <p className="absolute left-4 top-4 z-10 rounded border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
+          <p className="absolute left-4 top-4 z-10 rounded-control border border-danger-soft bg-danger-soft px-3 py-2 text-sm text-danger">
             {error}
           </p>
         )}
@@ -180,7 +180,7 @@ export function GraphView({ onBack }: { onBack: () => void }) {
         )}
         <div ref={containerRef} className="h-full w-full" />
 
-        <div className="absolute bottom-4 left-4 flex flex-col gap-1 rounded-md border border-line bg-canvas p-2 text-xs text-muted">
+        <div className="absolute bottom-4 left-4 flex flex-col gap-1 rounded-surface border border-line bg-canvas p-2 text-xs text-muted">
           {(Object.entries(EDGE_STYLE) as [GraphEdge["type"], (typeof EDGE_STYLE)[GraphEdge["type"]]][]).map(
             ([type, s]) => (
               <div key={type} className="flex items-center gap-2">
@@ -195,18 +195,17 @@ export function GraphView({ onBack }: { onBack: () => void }) {
         </div>
 
         {selection && (
-          <div className="absolute right-4 top-4 w-80 max-h-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-line bg-canvas p-4 text-sm">
+          <div className="absolute right-4 top-4 w-80 max-h-[calc(100%-2rem)] overflow-y-auto rounded-surface border border-line bg-canvas p-4 text-sm">
             {selection.kind === "node" ? (
               <>
                 <h2 className="font-semibold text-fg">{selection.node.sectionName}</h2>
                 <p className="text-xs text-faint">{selection.node.songTitle}</p>
                 <p className="mt-2 text-xs text-muted">{selection.node.romanNumerals.join(" – ")}</p>
-                <button
+                <Button variant="primary" size="sm" className="mt-3"
                   onClick={() => void openSong(selection.node.songId)}
-                  className="mt-3 rounded bg-accent px-2 py-1 text-xs font-medium text-accent-fg"
                 >
                   Open song
-                </button>
+                </Button>
                 <h3 className="mb-1 mt-4 text-xs font-medium uppercase tracking-wide text-faint">
                   Connections ({selection.edges.length})
                 </h3>
@@ -235,15 +234,14 @@ export function GraphView({ onBack }: { onBack: () => void }) {
                 <p className="mt-2 text-xs text-muted">{selection.edge.detail}</p>
                 <div className="mt-3 space-y-2">
                   {[selection.a, selection.b].map((n) => (
-                    <div key={n.id} className="rounded border border-line p-2">
+                    <div key={n.id} className="rounded-control border border-line p-2">
                       <p className="text-xs font-medium text-fg">{n.sectionName}</p>
                       <p className="text-xs text-faint">{n.songTitle}</p>
-                      <button
+                      <Button variant="subtle" size="sm" className="mt-1"
                         onClick={() => void openSong(n.songId)}
-                        className="mt-1 text-xs text-accent-light hover:text-fg"
                       >
                         Open →
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>

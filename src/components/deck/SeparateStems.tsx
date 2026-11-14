@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isModelCached, separateTrack, type SeparateProgress } from "../../audio/separate.js";
 import { useDeckStore } from "../../store/deckStore.js";
+import { Button } from "../controls.js";
 
 /**
  * Runs Demucs on the deck's track and stores the resulting stems.
@@ -57,12 +58,11 @@ export function SeparateStems() {
     <div className="border-t border-line px-3 py-2">
       {!running ? (
         <div className="flex items-center gap-2">
-          <button
+          <Button size="sm"
             onClick={() => void run()}
-            className="rounded bg-raised px-2 py-0.5 text-xs text-fg hover:bg-raised-hover"
           >
             Separate stems
-          </button>
+          </Button>
           <span className="text-[11px] text-faint">
             Splits the track into drums, bass, vocals and other, so you can mute or solo
             each one.
@@ -75,23 +75,22 @@ export function SeparateStems() {
           <div className="flex items-center gap-2 text-[11px] text-muted">
             <span>{progress ? label[progress.stage] : "Starting"}…</span>
             {progress?.detail && <span className="text-faint">{progress.detail}</span>}
-            <button
+            <Button variant="subtle" size="sm" className="ml-auto"
               onClick={() => {
                 // Inference can't actually be interrupted mid-segment; this
                 // stops the result being written and lets the UI recover.
                 cancelledRef.current = true;
                 setRunning(false);
               }}
-              className="ml-auto text-faint hover:text-danger"
             >
               Cancel
-            </button>
+            </Button>
           </div>
-          <div className="h-1 overflow-hidden rounded bg-raised">
+          <div className="h-1 overflow-hidden rounded-control bg-raised">
             <div
-              className="h-full bg-accent transition-[width]"
+              className="progress-fill h-full bg-accent"
               style={{
-                width: progress?.fraction != null ? `${Math.round(progress.fraction * 100)}%` : "100%",
+                transform: `scaleX(${progress?.fraction ?? 1})`,
                 opacity: progress?.fraction == null ? 0.4 : 1,
               }}
             />
@@ -103,7 +102,7 @@ export function SeparateStems() {
       )}
 
       {error && (
-        <p className="mt-1 rounded border border-danger-soft bg-danger-soft px-2 py-1 text-[11px] text-danger">
+        <p className="mt-1 rounded-control border border-danger-soft bg-danger-soft px-2 py-1 text-[11px] text-danger">
           {error}
         </p>
       )}

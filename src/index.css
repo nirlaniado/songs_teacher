@@ -28,6 +28,37 @@
   /* The editor grid is drawn over the teacher's slide, which may be white: a mid-grey shows on light and dark alike. */
   --studio-grid: rgb(148 163 184 / 0.12);
   --studio-black: #000000;
+  /* Light and shade on a control's edge. Not hues: they read as depth on whichever token sits under them. */
+  --studio-sheen: rgb(255 255 255 / 0.1);
+  --studio-shade: rgb(0 0 0 / 0.36);
+
+  /*
+   * Motion. Every duration and travel distance is here so reduced motion can be one block below.
+   * Hover arrives faster than it leaves, because the arrival answers the pointer and the departure is only cleanup.
+   */
+  --motion-press: 80ms;
+  --motion-hover-in: 70ms;
+  --motion-hover-out: 160ms;
+  --motion-enter: 180ms;
+  --motion-progress: 200ms;
+  /* Scale moves a pixel count, not a feel: 0.97 of a 24px glyph button is under a pixel, so small targets press harder. */
+  --press-scale: 0.97;
+  --press-scale-small: 0.9;
+  --enter-scale: 0.96;
+  --enter-rise: 6px;
+  --cue-grow-from: 0.25;
+}
+
+/* Keeps the fades, which carry state; drops every travel and press, which are what cause discomfort. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-scale: 1;
+    --press-scale-small: 1;
+    --enter-scale: 1;
+    --enter-rise: 0px;
+    --cue-grow-from: 1;
+    --motion-progress: 0ms;
+  }
 }
 
 /*
@@ -71,6 +102,17 @@
   --color-guide: var(--studio-pink);
   /* Present mode's letterbox and scrims sit on the projected slide, so they stay true black rather than tinted slate. */
   --color-stage: var(--studio-black);
+
+  /*
+   * Radius follows role. Controls share one value so a row of them reads as a set; surfaces take a larger one that is
+   * the control radius plus their 4px inset, so a menu row's corners stay concentric with the menu's. A slide is paper
+   * with square corners, so anything hugging one stays nearly square rather than implying it is rounded.
+   */
+  --radius-slide: 2px;
+  --radius-control: 6px;
+  --radius-surface: 10px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 html,
@@ -81,4 +123,383 @@ body,
 
 body {
   @apply bg-canvas text-fg antialiased;
+}
+
+@layer base {
+  /*
+   * `:where` has no weight, so anything can override this, and the inline editor's textarea keeps its own inline
+   * `outline: none`, leaving that overlay untouched. No transition: a keyboard user needs the ring where focus already
+   * is, not on its way there.
+   */
+  :where(button, a[href], summary, select, input, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-accent-light);
+    outline-offset: 2px;
+  }
+
+  input[type="checkbox"],
+  input[type="range"] {
+    accent-color: var(--color-accent);
+  }
+}
+
+@layer components {
+  /*
+   * Hover and the lit state are stacked layers fading on opacity, not background-color transitions: that keeps every
+   * transition on the compositor, and lets the same wash work over any variant's fill. `isolate` is what puts the
+   * z-index:-1 layers above the control's own background and below its label.
+   */
+  .control,
+  .menu-item,
+  .tile,
+  .row {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .control::before,
+  .control::after,
+  .menu-item::after,
+  .tile::after,
+  .row::after,
+  .slide-thumb::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--motion-hover-out) var(--ease-out);
+  }
+
+  .control {
+    --wash: var(--studio-sheen);
+    --lit: var(--color-accent-light);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+    height: var(--control-height);
+    padding-inline: var(--control-inset);
+    border-radius: var(--radius-control);
+    background: var(--control-fill, transparent);
+    box-shadow: var(--control-edge, none);
+    color: var(--control-ink);
+    font-size: var(--control-text);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    user-select: none;
+    transition: transform var(--motion-hover-out) var(--ease-out);
+  }
+
+  /* A file input styled as a button is visually hidden, so its label has to show the ring for it. */
+  .control:has(input:focus-visible) {
+    outline: 2px solid var(--color-accent-light);
+    outline-offset: 2px;
+  }
+
+  .control-sm {
+    --control-height: 1.5rem;
+    --control-inset: 0.5rem;
+    --control-text: 0.6875rem;
+  }
+
+  .control-md {
+    --control-height: 1.75rem;
+    --control-inset: 0.625rem;
+    --control-text: 0.75rem;
+  }
+
+  .control-lg {
+    --control-height: 2.25rem;
+    --control-inset: 1rem;
+    --control-text: 0.875rem;
+  }
+
+  .control-icon {
+    width: var(--control-height);
+    padding-inline: 0;
+  }
+
+  .control-round {
+    border-radius: 9999px;
+  }
+
+  .control-primary {
+    --control-fill: var(--color-accent);
+    --control-ink: var(--color-accent-fg);
+    --control-edge: inset 0 1px 0 var(--studio-sheen), 0 1px 2px var(--studio-shade);
+  }
+
+  .control-secondary {
+    --control-fill: var(--color-raised);
+    --control-ink: var(--color-fg);
+    --control-edge: inset 0 0 0 1px var(--color-line), inset 0 1px 0 var(--studio-sheen), 0 1px 1px var(--studio-shade);
+  }
+
+  .control-subtle {
+    --control-ink: var(--color-muted);
+  }
+
+  .control-destructive {
+    --control-fill: var(--color-danger-soft);
+    --control-ink: var(--color-danger);
+    --control-edge: inset 0 0 0 1px var(--color-danger-soft);
+    --wash: var(--color-danger-soft);
+  }
+
+  /* A list of rows each with a red button shouts; this one stays quiet until the pointer means it. */
+  .control-destructive-subtle {
+    --control-ink: var(--color-faint);
+    --wash: var(--color-danger-soft);
+  }
+
+  .control:disabled {
+    opacity: 0.4;
+  }
+
+  /* Lit like a key on a mixing desk: the on-state is a light in the control, not a different control. */
+  .control::before {
+    background: color-mix(in srgb, var(--lit) 20%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--lit) 55%, transparent),
+      0 0 10px color-mix(in srgb, var(--lit) 22%, transparent);
+  }
+
+  .control::after {
+    background: var(--wash);
+  }
+
+  .control[aria-pressed="true"] {
+    color: var(--lit);
+  }
+
+  .control[aria-pressed="true"]::before {
+    opacity: 1;
+  }
+
+  .control[data-tone="danger"] {
+    --lit: var(--color-danger);
+  }
+
+  .control[data-tone="warning"] {
+    --lit: var(--color-warning);
+  }
+
+  .control:active:not(:disabled) {
+    transform: scale(var(--press-scale));
+    transition-duration: var(--motion-press);
+  }
+
+  .control-icon:active:not(:disabled) {
+    transform: scale(var(--press-scale-small));
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    width: 100%;
+    height: 1.625rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--radius-control);
+    color: var(--color-fg);
+    font-size: 0.75rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  /* Rows touch their neighbours, so an outset ring would be painted over by the next one. */
+  .menu-item:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .menu-item:disabled {
+    color: var(--color-faint);
+  }
+
+  .menu-item::after {
+    background: var(--color-raised);
+  }
+
+  .tile {
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-control);
+    background: var(--color-canvas);
+    color: var(--color-muted);
+    transition: transform var(--motion-hover-out) var(--ease-out);
+  }
+
+  .tile:active:not(:disabled) {
+    transform: scale(var(--press-scale));
+    transition-duration: var(--motion-press);
+  }
+
+  .tile[aria-pressed="true"] {
+    color: var(--color-fg);
+  }
+
+  .tile::after {
+    box-shadow: inset 0 0 0 2px var(--color-accent);
+  }
+
+  .tile[aria-pressed="true"]::after {
+    opacity: 1;
+  }
+
+  .row::after {
+    background: var(--color-panel);
+  }
+
+  /*
+   * Wraps a SlideRenderer, so no transform and no type styles. The slide overhangs this button, and `isolate` keeps the
+   * ring at z-index:-1 painting where the border did: over the button, under the slide.
+   */
+  .slide-thumb {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .slide-thumb::after {
+    inset: -2px;
+    box-shadow: inset 0 0 0 2px var(--color-accent);
+  }
+
+  .slide-thumb[aria-current="true"]::after {
+    opacity: 1;
+  }
+
+  .field {
+    display: block;
+    height: var(--field-height);
+    padding-inline: var(--field-inset);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-control);
+    background: var(--color-canvas);
+    color: var(--color-fg);
+    color-scheme: dark;
+    font-size: var(--field-text);
+  }
+
+  .field::placeholder {
+    color: var(--color-faint);
+  }
+
+  /*
+   * `:focus`, not `:focus-visible`: browsers match both on a text field even after a click, because a caret needs
+   * showing either way. So a field never draws the outset ring; it lights its own edge, in bounds, for any focus.
+   */
+  .field:focus {
+    outline: none;
+    border-color: var(--color-accent-light);
+    box-shadow: inset 0 0 0 1px var(--color-accent-light);
+  }
+
+  .field[aria-invalid="true"] {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+  }
+
+  .field[aria-invalid="true"]:focus {
+    box-shadow: inset 0 0 0 1px var(--color-warning);
+  }
+
+  .field-sm {
+    --field-height: 1.5rem;
+    --field-inset: 0.375rem;
+    --field-text: 0.75rem;
+  }
+
+  .field-md {
+    --field-height: 1.75rem;
+    --field-inset: 0.5rem;
+    --field-text: 0.8125rem;
+  }
+
+  .field-lg {
+    --field-height: 2.25rem;
+    --field-inset: 0.75rem;
+    --field-text: 0.875rem;
+  }
+
+  textarea.field {
+    height: auto;
+    padding-block: 0.25rem;
+  }
+
+  .field[type="color"] {
+    padding: 0.125rem;
+  }
+
+  .fade {
+    transition: opacity var(--motion-hover-out) var(--ease-out);
+  }
+
+  .pop {
+    transform-origin: top left;
+    transition:
+      opacity var(--motion-enter) var(--ease-out),
+      transform var(--motion-enter) var(--ease-out);
+  }
+
+  /* The one choreographed moment: the music panel rises and its cue marks grow out of the timeline with it. */
+  .panel-rise {
+    transition:
+      opacity var(--motion-enter) var(--ease-out),
+      transform var(--motion-enter) var(--ease-out);
+  }
+
+  /* Remounted by a changed cue time, so pressing Set is answered by a mark growing at the playhead. */
+  .cue-mark {
+    transform-origin: bottom;
+    transition: transform var(--motion-enter) var(--ease-out);
+  }
+
+  .progress-fill {
+    width: 100%;
+    transform-origin: left;
+    transition: transform var(--motion-progress) linear;
+  }
+}
+
+@starting-style {
+  .pop {
+    opacity: 0;
+    transform: scale(var(--enter-scale));
+  }
+
+  .panel-rise {
+    opacity: 0;
+    transform: translateY(var(--enter-rise));
+  }
+
+  .cue-mark {
+    transform: scaleY(var(--cue-grow-from));
+  }
+}
+
+/* Touch fires hover on tap and leaves it stuck, so the wash needs a real pointer. */
+@media (hover: hover) and (pointer: fine) {
+  .control:hover:not(:disabled)::after,
+  .menu-item:hover:not(:disabled)::after,
+  .row:hover::after {
+    opacity: 1;
+    transition-duration: var(--motion-hover-in);
+  }
+
+  .control-subtle:hover:not(:disabled):not([aria-pressed="true"]) {
+    color: var(--color-fg);
+  }
+
+  .control-destructive-subtle:hover:not(:disabled) {
+    color: var(--color-danger);
+  }
+
+  .tile:hover:not(:disabled):not([aria-pressed="true"]) {
+    border-color: var(--color-faint);
+  }
 }

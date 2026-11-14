@@ -1,5 +1,6 @@
 import { clearSolos, isSilent, setStemGain, sortStems, STEM_LABEL, toggleStem } from "../../audio/mix.js";
 import { useDeckStore } from "../../store/deckStore.js";
+import { Button } from "../controls.js";
 
 /**
  * Per-instrument mute / solo / volume for a separated song.
@@ -28,21 +29,19 @@ export function StemMixer() {
           <span className="text-[10px] text-warning">everything is muted — no sound</span>
         )}
         {soloing && (
-          <button
+          <Button variant="subtle" size="sm"
             onClick={() => setStemMix(clearSolos(stemMix))}
-            className="text-[10px] text-accent-light hover:text-fg"
           >
             clear solo
-          </button>
+          </Button>
         )}
-        <button
+        <Button variant="destructive-subtle" size="sm" className="ml-auto"
           onClick={() => {
             if (confirm("Remove the separated stems? The full mix is kept.")) void removeStems();
           }}
-          className="ml-auto text-[10px] text-faint hover:text-danger"
         >
           Remove stems
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-1">
@@ -58,26 +57,20 @@ export function StemMixer() {
                 {STEM_LABEL[stem.id]}
               </span>
 
-              <button
+              <Button size="sm" icon pressed={stem.muted} tone="danger"
                 onClick={() => setStemMix(toggleStem(stemMix, stem.id, "muted"))}
                 title="Mute"
                 aria-label={`Mute ${STEM_LABEL[stem.id]}`}
-                className={`w-6 rounded px-1 py-0.5 text-[10px] font-medium ${
-                  stem.muted ? "bg-danger text-canvas" : "bg-raised text-muted"
-                }`}
               >
                 M
-              </button>
-              <button
+              </Button>
+              <Button size="sm" icon pressed={stem.soloed} tone="warning"
                 onClick={() => setStemMix(toggleStem(stemMix, stem.id, "soloed"))}
                 title="Solo"
                 aria-label={`Solo ${STEM_LABEL[stem.id]}`}
-                className={`w-6 rounded px-1 py-0.5 text-[10px] font-medium ${
-                  stem.soloed ? "bg-warning text-canvas" : "bg-raised text-muted"
-                }`}
               >
                 S
-              </button>
+              </Button>
 
               <input
                 type="range"
@@ -87,7 +80,7 @@ export function StemMixer() {
                 value={stem.gain}
                 onChange={(e) => setStemMix(setStemGain(stemMix, stem.id, Number(e.target.value)))}
                 aria-label={`${STEM_LABEL[stem.id]} volume`}
-                className="h-1 flex-1 accent-accent"
+                className="h-1 flex-1"
               />
             </div>
           );

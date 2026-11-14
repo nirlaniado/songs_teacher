@@ -5,6 +5,8 @@ import { useDeckPlayer } from "../../audio/useDeckPlayer.js";
 import { useDeckStore } from "../../store/deckStore.js";
 import { SlideRenderer, imagePathsOf } from "./SlideRenderer.js";
 import { useDeckAssets } from "./useDeckAssets.js";
+import { Button } from "../controls.js";
+import { Icon } from "../icons.js";
 
 /**
  * Fullscreen playback: the song plays and the deck follows its cues.
@@ -197,7 +199,7 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
           }}
           className="absolute inset-0 flex items-center justify-center bg-stage/70 text-fg"
         >
-          <span className="rounded-lg border border-faint bg-panel px-6 py-4 text-center">
+          <span className="rounded-surface border border-faint bg-panel px-6 py-4 text-center">
             <span className="block text-lg">▶ Click to start</span>
             <span className="mt-1 block text-xs text-muted">
               Your browser blocked playback from starting on its own.
@@ -206,40 +208,43 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
         </button>
       )}
 
-      {chrome && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-stage/85 to-transparent px-5 pb-4 pt-10 text-sm text-fg">
-          <button onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous slide" className="disabled:opacity-30">
-            ←
-          </button>
+      {/* Stays mounted so it can fade out over the slide instead of vanishing mid-lesson; `inert` keeps it out of reach. */}
+      <div
+        inert={!chrome}
+        className={`fade absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-stage/85 to-transparent px-5 pb-4 pt-10 text-sm text-fg ${
+          chrome ? "" : "opacity-0"
+        }`}
+      >
+          <Button variant="subtle" icon className="text-fg" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous slide">
+            <Icon name="arrowLeft" />
+          </Button>
           <span className="tabular-nums">
             {slides.length === 0 ? 0 : index + 1} / {slides.length}
           </span>
-          <button
+          <Button variant="subtle" icon className="text-fg"
             onClick={() => goTo(index + 1)}
             disabled={index >= slides.length - 1}
             aria-label="Next slide"
-            className="disabled:opacity-30"
           >
-            →
-          </button>
+            <Icon name="arrowRight" />
+          </Button>
 
           {deck.audio && (
             <>
               <span className="mx-1 h-4 w-px bg-fg/20" />
-              <button
+              <Button variant="primary" size="sm" icon="round"
                 onClick={player.toggle}
                 aria-label={playing ? "Pause" : "Play"}
-                className="rounded bg-accent px-2 py-0.5 text-xs text-accent-fg"
               >
-                {playing ? "⏸" : "▶"}
-              </button>
+                <Icon name={playing ? "pause" : "play"} />
+              </Button>
               <span className="tabular-nums text-xs text-muted">
                 {formatCue(time)}
                 {duration ? ` / ${formatCue(duration)}` : ""}
               </span>
 
               <div
-                className="relative h-1.5 flex-1 cursor-pointer rounded bg-fg/20"
+                className="relative h-1.5 flex-1 cursor-pointer rounded-control bg-fg/20"
                 onClick={(e) => {
                   if (!duration) return;
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -265,23 +270,19 @@ export function PresentMode({ onExit }: { onExit: () => void }) {
                 )}
               </div>
 
-              <button
+              <Button variant="subtle" size="sm" pressed={manual} tone="warning"
                 onClick={() => setManual(false)}
                 title="Resume following the music"
-                className={`rounded px-2 py-0.5 text-xs ${
-                  manual ? "bg-warning text-canvas" : "bg-fg/10 text-muted"
-                }`}
               >
                 {manual ? "Manual — click to follow" : "Following music"}
-              </button>
+              </Button>
             </>
           )}
 
-          <button onClick={onExit} className="ml-auto text-xs text-muted hover:text-fg">
+          <Button variant="subtle" size="sm" className="ml-auto" onClick={onExit}>
             Exit (Esc)
-          </button>
-        </div>
-      )}
+          </Button>
+      </div>
     </div>
   );
 }

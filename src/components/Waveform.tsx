@@ -184,7 +184,7 @@ export function Waveform({ audioUrl }: { audioUrl: string }) {
   }, [sections]);
 
   return (
-    <div className="rounded-lg border border-line bg-panel p-3">
+    <div className="rounded-surface border border-line bg-panel p-3">
       <div ref={containerRef} />
       <p className="mt-2 text-xs text-faint">
         Drag on empty waveform to mark a section. Drag a region's edges to resize, click to
