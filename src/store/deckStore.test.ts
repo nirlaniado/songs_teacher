@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newDeck, type Deck, type DeckSummary, type Slide, type SlideElement } from "../schema/deck.js";
 import { arrange, useDeckStore } from "./deckStore.js";
 import type { LibraryAdapter } from "../adapters/types.js";
@@ -260,6 +260,52 @@ describe("view state", () => {
     store.setZoom(2);
     expect(useDeckStore.getState().isDirty()).toBe(false);
     expect(useDeckStore.getState().past).toHaveLength(0);
+  });
+
+  describe("the library's view mode", () => {
+    function fakeStorage() {
+      const saved = new Map<string, string>();
+      vi.stubGlobal("localStorage", {
+        getItem: (key: string) => saved.get(key) ?? null,
+        setItem: (key: string, value: string) => void saved.set(key, value),
+      });
+    }
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("never dirties or reaches the document", () => {
+      fakeStorage();
+      openWith([box("a")]);
+      useDeckStore.setState({ savedSnapshot: JSON.stringify(useDeckStore.getState().deck) });
+      useDeckStore.getState().setLibraryView("grid");
+      expect(useDeckStore.getState().isDirty()).toBe(false);
+      expect(useDeckStore.getState().past).toHaveLength(0);
+      expect(JSON.stringify(useDeckStore.getState().deck)).not.toContain("grid");
+      useDeckStore.getState().setLibraryView("list");
+    });
+
+    it("survives a reload, which is a fresh store reading what the last one saved", async () => {
+      fakeStorage();
+      useDeckStore.getState().setLibraryView("grid");
+      vi.resetModules();
+      const reloaded = await import("./deckStore.js");
+      expect(reloaded.useDeckStore.getState().libraryView).toBe("grid");
+      useDeckStore.getState().setLibraryView("list");
+    });
+
+    it("defaults to list, the mockup's selected state, and ignores anything else saved", async () => {
+      fakeStorage();
+      localStorage.setItem("songs-teacher.library-view", "carousel");
+      vi.resetModules();
+      expect((await import("./deckStore.js")).useDeckStore.getState().libraryView).toBe("list");
+    });
+
+    it("still holds the choice when storage is refused", () => {
+      vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => { throw new Error("denied"); } });
+      useDeckStore.getState().setLibraryView("grid");
+      expect(useDeckStore.getState().libraryView).toBe("grid");
+      useDeckStore.getState().setLibraryView("list");
+    });
   });
 });
 

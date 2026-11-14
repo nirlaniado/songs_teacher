@@ -50,7 +50,11 @@ function session(s: Script, samples: number) {
   };
   return { run, inputs, calls: () => call };
 }
-const audio = (seconds: number) => new Float32Array(seconds * RATE).map((_, i) => Math.sin(i * 0.05));
+function audio(seconds: number) {
+  const x = new Float32Array(seconds * RATE);
+  for (let i = 0; i < x.length; i++) x[i] = Math.sin(i * 0.05);
+  return x;
+}
 
 describe("alignSections", () => {
   it("places two sections in order, each starting and ending where it is sung", async () => {
@@ -224,7 +228,10 @@ describe("alignment memory", () => {
     expect(alignmentBytes(18_000, 3000)).toBeGreaterThan(100 * 1024 * 1024);
   });
 
-  it("keeps every alignment of a six-minute song with dense lyrics within the bound", async () => {
+  // Inherently long: it runs the real windowed alignment over six minutes of dense lyrics (about 1.3s
+  // on an idle machine, nearly all of it production code), because a short song can't reach the bound.
+  // Under a loaded gate that passes 5s, so it gets room rather than a smaller song (#14).
+  it("keeps every alignment of a six-minute song with dense lyrics within the bound", { timeout: 20_000 }, async () => {
     const s = script(360);
     const line = "we sing these words so fast the frames can barely hold them all ";
     const sections = Array.from({ length: 12 }, (_, k) => ({ lyrics: [`${line.repeat(6)}part ${k}`] }));

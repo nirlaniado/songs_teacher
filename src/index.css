@@ -17,9 +17,21 @@
   --studio-white: #ffffff;
   --studio-mist: #b6c0d4;
   --studio-fog: #8a94a8;
-  --studio-blue: #2563eb;
-  /* Not in the owner's table: #2563eb as text on #0f172a is ~3:1, under AA, so blue *text* uses this lighter step. */
-  --studio-blue-light: #60a5fa;
+  /* Lightened from the mockup's fill: this is also a selection mark on dark panels, and it matches the old blue's ~3:1 there. */
+  --studio-violet: #6d4aff;
+  /* The mockup's own button colours. Only ever behind white text, where their depth is safe. */
+  --studio-violet-deep: #4f2fe0;
+  --studio-indigo: #4057ee;
+  /* The fill is ~3:1 as text on these surfaces, under AA, so violet *text* uses this lighter step. */
+  --studio-violet-light: #a78bfa;
+  /* The headline and waveform sweep, sampled from the mockup. Colour only, never behind text. */
+  --studio-sweep-from: #a03af9;
+  --studio-sweep-mid: #5c66fa;
+  --studio-sweep-to: #1c98fa;
+  /* The mockup's darker surfaces. Library and nav only for now; the editor moves when it gets its own pass. */
+  --studio-night: #060c1a;
+  --studio-deep: #0b111e;
+  --studio-well: #0f1623;
   /* State hues, kept apart from the blue so they never read as selection; text-weight on the dark surfaces. */
   --studio-amber: #fbbf24;
   --studio-green: #34d399;
@@ -47,6 +59,9 @@
   --enter-scale: 0.96;
   --enter-rise: 6px;
   --cue-grow-from: 0.25;
+
+  /* The hero's photo. Point this at a file, e.g. url("./assets/hero.jpg"), and it replaces the CSS art with nothing else to change. */
+  --hero-photo: none;
 }
 
 /* Keeps the fades, which carry state; drops every travel and press, which are what cause discomfort. */
@@ -85,10 +100,18 @@
   --color-muted: var(--studio-mist);
   --color-faint: var(--studio-fog);
 
-  --color-accent: var(--studio-blue);
+  --color-accent: var(--studio-violet);
+  --color-accent-deep: var(--studio-violet-deep);
+  --color-accent-end: var(--studio-indigo);
   --color-accent-fg: var(--studio-white);
-  --color-accent-light: var(--studio-blue-light);
-  --color-accent-soft: rgb(37 99 235 / 0.22);
+  --color-accent-light: var(--studio-violet-light);
+  --color-accent-soft: rgb(109 74 255 / 0.22);
+  --color-sweep-from: var(--studio-sweep-from);
+  --color-sweep-mid: var(--studio-sweep-mid);
+  --color-sweep-to: var(--studio-sweep-to);
+  --color-night: var(--studio-night);
+  --color-deep: var(--studio-deep);
+  --color-well: var(--studio-well);
 
   --color-warning: var(--studio-amber);
   --color-warning-soft: rgb(251 191 36 / 0.14);
@@ -111,6 +134,7 @@
   --radius-slide: 2px;
   --radius-control: 6px;
   --radius-surface: 10px;
+  --radius-panel: 16px;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -229,7 +253,7 @@ body {
   }
 
   .control-primary {
-    --control-fill: var(--color-accent);
+    --control-fill: linear-gradient(100deg, var(--color-accent-deep), var(--color-accent-end));
     --control-ink: var(--color-accent-fg);
     --control-edge: inset 0 1px 0 var(--studio-sheen), 0 1px 2px var(--studio-shade);
   }
@@ -313,6 +337,14 @@ body {
     white-space: nowrap;
   }
 
+  .menu-item-danger {
+    color: var(--color-danger);
+  }
+
+  .menu-item-danger::after {
+    background: var(--color-danger-soft);
+  }
+
   /* Rows touch their neighbours, so an outset ring would be painted over by the next one. */
   .menu-item:focus-visible {
     outline-offset: -2px;
@@ -352,7 +384,7 @@ body {
   }
 
   .row::after {
-    background: var(--color-panel);
+    background: var(--row-wash, var(--color-panel));
   }
 
   /*
@@ -466,7 +498,553 @@ body {
   }
 }
 
+@layer components {
+  /* The nav stays put while a section scrolls, so a focused row can't slide under it. */
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    background: var(--color-night);
+  }
+
+  .app-main {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .app-nav {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: space-around;
+    gap: 0.25rem;
+    padding: 0.5rem clamp(0.5rem, 3vw, 2.5rem);
+    border-top: 1px solid var(--color-line);
+    background: var(--color-deep);
+  }
+
+  .control.nav-item {
+    --control-height: 2.75rem;
+    --control-inset: 1.5rem;
+    --control-text: 0.8125rem;
+    gap: 0.625rem;
+    border-radius: 9999px;
+  }
+
+  .control.nav-item[aria-current="page"] {
+    --control-fill: linear-gradient(100deg, var(--color-accent-deep), var(--color-accent-end));
+    --control-ink: var(--color-accent-fg);
+    --control-edge: inset 0 1px 0 var(--studio-sheen), 0 4px 18px var(--color-accent-soft);
+  }
+
+  .library {
+    min-height: 100%;
+    padding-bottom: 2rem;
+    color: var(--color-fg);
+  }
+
+  .library-width {
+    width: min(100%, 76rem);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2.5rem);
+  }
+
+  .hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding-bottom: 3.25rem;
+  }
+
+  .hero-art,
+  .hero-photo,
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+  }
+
+  /* Stands in for the photo: a warm lamp, the violet room, and six strings crossing the corner. */
+  .hero-art {
+    background:
+      radial-gradient(8rem 7rem at 72% 22%, rgb(255 214 150 / 0.62), transparent 72%),
+      radial-gradient(26rem 18rem at 72% 26%, rgb(244 150 70 / 0.5), transparent 72%),
+      radial-gradient(30rem 22rem at 92% 88%, color-mix(in srgb, var(--color-sweep-to) 55%, transparent), transparent 70%),
+      radial-gradient(38rem 26rem at 58% 62%, color-mix(in srgb, var(--color-accent) 42%, transparent), transparent 72%),
+      var(--color-night);
+  }
+
+  .hero-art::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 34%;
+    background: repeating-linear-gradient(104deg, transparent 0 26px, rgb(255 236 214 / 0.14) 26px 27px);
+    mask-image: linear-gradient(to right, transparent, black 55%);
+  }
+
+  .hero-photo {
+    background: var(--hero-photo) center / cover no-repeat;
+  }
+
+  /* Keeps the headline readable over any photo, and fades the hero's foot into the page behind the panel. */
+  .hero-scrim {
+    background:
+      linear-gradient(to top, var(--color-night), transparent 42%),
+      linear-gradient(90deg, var(--color-night) 30%, rgb(6 12 26 / 0.55) 55%, transparent 78%);
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 1.125rem;
+  }
+
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .wordmark svg {
+    color: var(--color-sweep-mid);
+  }
+
+  .hero-copy {
+    max-width: 38rem;
+    padding-top: clamp(0.5rem, 2.5vw, 1.5rem);
+  }
+
+  .hero-eyebrow {
+    font-size: 0.75rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .hero-title {
+    margin-top: 0.625rem;
+    font-size: clamp(2.125rem, 4.6vw, 3rem);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  .hero-sweep {
+    display: block;
+    background: linear-gradient(90deg, var(--color-sweep-from), var(--color-sweep-mid) 55%, var(--color-sweep-to));
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero-subtitle {
+    margin-top: 0.875rem;
+    max-width: 30rem;
+    color: var(--color-muted);
+    line-height: 1.55;
+  }
+
+  /* The screen's one entrance. On the copy alone: a row holds a slide, and a slide never moves. */
+  .hero-rise > * {
+    transition:
+      opacity var(--motion-enter) var(--ease-out),
+      transform var(--motion-enter) var(--ease-out);
+  }
+
+  .hero-rise > :nth-child(2) {
+    transition-delay: 40ms;
+  }
+
+  .hero-rise > :nth-child(3) {
+    transition-delay: 80ms;
+  }
+
+  .hero-notice {
+    max-width: 44rem;
+    margin-top: 1rem;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--color-accent-soft);
+    border-radius: var(--radius-surface);
+    background: var(--color-accent-soft);
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .hero-notice-danger {
+    border-color: var(--color-danger-soft);
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  .create-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    max-width: 44rem;
+    margin-top: 1.125rem;
+  }
+
+  .create-row .control-primary {
+    box-shadow: var(--control-edge), 0 4px 18px var(--color-accent-soft);
+  }
+
+  .field-icon {
+    position: relative;
+    display: block;
+    min-width: 0;
+  }
+
+  .field-icon > svg {
+    position: absolute;
+    top: 50%;
+    left: 0.75rem;
+    translate: 0 -50%;
+    color: var(--color-faint);
+    pointer-events: none;
+  }
+
+  .field-icon > .field {
+    width: 100%;
+    padding-inline-start: 2.25rem;
+  }
+
+  .create-row .field-icon {
+    flex: 1 1 16rem;
+  }
+
+  .create-row .field {
+    border-color: var(--color-line);
+    background: var(--color-well);
+  }
+
+  .deck-panel {
+    position: relative;
+    margin-top: -1.75rem;
+  }
+
+  .deck-panel-inner {
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+    background: var(--color-deep);
+    box-shadow: 0 18px 50px var(--studio-shade);
+  }
+
+  .deck-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem 1.125rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .deck-panel-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .deck-panel-title svg {
+    color: var(--color-accent-light);
+  }
+
+  .deck-count {
+    color: var(--color-faint);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .deck-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-inline-start: auto;
+  }
+
+  .deck-search {
+    width: 15rem;
+  }
+
+  .deck-list {
+    padding: 0.375rem;
+  }
+
+  .deck-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+    gap: 0.75rem;
+    padding: 0.875rem;
+  }
+
+  .deck-row,
+  .deck-card {
+    --row-wash: var(--studio-sheen);
+    display: grid;
+    align-items: center;
+    border-radius: var(--radius-surface);
+    cursor: pointer;
+  }
+
+  .deck-row {
+    grid-template-columns: auto minmax(0, 1.15fr) minmax(0, 1fr) 6.5rem auto;
+    gap: 1.25rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .deck-row + .deck-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    inset-inline: 0.75rem;
+    height: 1px;
+    background: var(--color-line);
+  }
+
+  .deck-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.875rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-well);
+  }
+
+  /* A row can't be a Button: it holds a slide and two controls. The title stretches over it, so the row is one target. */
+  .deck-open {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .deck-open::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .deck-open:focus-visible {
+    outline: none;
+  }
+
+  .row:has(.deck-open:focus-visible) {
+    outline: 2px solid var(--color-accent-light);
+    outline-offset: 1px;
+  }
+
+  /* Rows are stacking contexts, so an open menu would otherwise paint under the next one. */
+  .row:has([aria-expanded="true"]) {
+    z-index: 2;
+  }
+
+  .deck-actions {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: default;
+  }
+
+  .deck-card .deck-actions {
+    flex-shrink: 0;
+  }
+
+  .deck-menu {
+    position: relative;
+  }
+
+  .deck-menu-list {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 3;
+    min-width: 9rem;
+    margin-top: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-surface);
+    background: var(--color-panel);
+    box-shadow: 0 12px 30px var(--studio-shade);
+    transform-origin: top right;
+  }
+
+  .deck-info {
+    display: grid;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+
+  .deck-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .deck-card-head .deck-open {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .deck-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    height: 1.375rem;
+    padding-inline: 0.4375rem;
+    border-radius: var(--radius-control);
+    background: var(--studio-sheen);
+    color: var(--color-muted);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .badge-accent {
+    background: var(--color-accent-soft);
+    color: var(--color-accent-light);
+  }
+
+  .deck-date {
+    color: var(--color-faint);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+  }
+
+  .deck-date time {
+    display: block;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+
+  .waveform {
+    display: block;
+    width: 100%;
+    height: 1.75rem;
+    pointer-events: none;
+  }
+
+  .waveform-silent {
+    color: var(--color-line);
+  }
+
+  .waveform-from {
+    stop-color: var(--color-sweep-from);
+  }
+
+  .waveform-mid {
+    stop-color: var(--color-sweep-mid);
+  }
+
+  .waveform-to {
+    stop-color: var(--color-sweep-to);
+    stop-opacity: 0.3;
+  }
+
+  /* Sized by SlideRenderer's own box, so it can never crop or stretch what the renderer drew. */
+  .deck-thumb {
+    flex-shrink: 0;
+    pointer-events: none;
+  }
+
+  .deck-thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--color-line);
+    border-radius: var(--radius-slide);
+    background: var(--color-well);
+    color: var(--color-faint);
+  }
+
+  .deck-empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding: 2.5rem 1rem;
+    color: var(--color-faint);
+    font-size: 0.875rem;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 62rem) {
+    .deck-row {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .deck-row .waveform,
+    .deck-row .deck-date {
+      display: none;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .deck-panel-head {
+      padding-inline: 0.75rem;
+    }
+
+    .deck-tools {
+      width: 100%;
+    }
+
+    .deck-search {
+      flex: 1;
+      width: auto;
+    }
+
+    .deck-row {
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 0.625rem 0.875rem;
+    }
+
+    .deck-row .deck-actions {
+      grid-column: 1 / -1;
+      justify-content: flex-end;
+    }
+
+    .control.nav-item {
+      --control-inset: 0;
+      flex: 1;
+    }
+
+    .nav-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}
+
 @starting-style {
+  .hero-rise > * {
+    opacity: 0;
+    transform: translateY(var(--enter-rise));
+  }
+
   .pop {
     opacity: 0;
     transform: scale(var(--enter-scale));
@@ -501,5 +1079,9 @@ body {
 
   .tile:hover:not(:disabled):not([aria-pressed="true"]) {
     border-color: var(--color-faint);
+  }
+
+  .menu-item-danger:hover:not(:disabled) {
+    color: var(--color-danger);
   }
 }

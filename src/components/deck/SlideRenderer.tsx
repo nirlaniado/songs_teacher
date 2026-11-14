@@ -411,6 +411,9 @@ export function SlideRenderer({
         position: "relative",
         overflow: "hidden",
         flexShrink: 0,
+        // Inherited, and the thumbnail rail mounts slides inside a <button>, which centres its
+        // content: a tab, which has no alignment of its own, drew centred in the rail only.
+        textAlign: "start",
       }}
     >
       <div

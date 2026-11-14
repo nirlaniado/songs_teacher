@@ -355,7 +355,7 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 498 tests; needs no database
+npm test           # vitest — 532 tests; needs no database
 npm run typecheck  # app, chord agent and accounts backend tsconfigs
 npm run build      # typecheck + production build
 npm run api:server   # accounts backend on 127.0.0.1:4319 (needs DATABASE_URL)
@@ -446,6 +446,11 @@ Break these and the design stops working. Each was argued through, not defaulted
   (`field.style.width = "1px"` before reading `scrollWidth`): without it, `scrollWidth` on
   an already-wide box just reports that same width back once short content no longer
   overflows it, so the box could grow but never shrink back down.
+  **The collapse must be undone straight after reading** (`measureEditor.ts`). React writes
+  a style only when the value it renders changes, and a keystroke that leaves the box size
+  alone renders the same value — so a `1px` width or `auto` height left by measuring stayed
+  in the DOM, blanking a tab and cutting every editor to two rows (#33). It looked
+  palette-specific only because a bend insert is a single, visible action.
 - **Clipping and shrink-to-fit are two different bugs that look identical from a
   screenshot.** Both of the traps above are about the *editing* overlay growing to keep
   content visible while typing. Resizing a box *without* entering edit mode (drag a handle
@@ -519,6 +524,23 @@ Break these and the design stops working. Each was argued through, not defaulted
   responses that had been rate-limited, which passed for the wrong reason.
 - **Don't put `currentTime` in React state**, and don't use `timeupdate` (see the stack
   table).
+- **A mount point's inherited styles reach the slide.** Inherited properties cross into
+  `SlideRenderer` from whatever it is mounted in. The thumbnail rail mounts slides inside a
+  `<button>`, which centres its content (the library's clickable rows and cards do the same),
+  and a tab element sets no alignment of its own, so its text drew centred there and
+  left-aligned on the canvas and in Present. Fixed by pinning `text-align` on the renderer's
+  root — the only inherited property shown to reach a slide visibly; don't add speculative
+  resets beside it. `SlideRenderer.mounts.test.tsx` mounts the real rail, canvas, Present and
+  library rows and cards under the compiled stylesheet. It compares the computed styles jsdom
+  resolves (selector matches and inheritance) for the renderer's surface, its scaled layer and
+  every node of the slide's content, each with its own `::before` and `::after`, against the same
+  slide drawn on its own at the same scale, and asserts each mount's scale (surface 1280·s ×
+  720·s, `scale(s)`). Differences it ignores are named in `appearanceDifferences`
+  (`src/test/dom.ts`): interaction-only properties, list styles off list items, and the
+  library row's own `--row-wash`. Any other custom property is compared, because a mount rule
+  can set one on the surface and read it in a pseudo-element (#47). jsdom does no layout or
+  painting, so final box sizes, overlap and paint order are not covered; the canvas and Present
+  scales come from a stubbed `getBoundingClientRect`.
 - **The usual checks can't see what paints over a slide.** A thumbnail overhangs its button
   by a few pixels, and a selection ring at `z-index: 0` drew across the slide there, where
   the old border had painted behind it. The markup snapshot and every computed style stayed

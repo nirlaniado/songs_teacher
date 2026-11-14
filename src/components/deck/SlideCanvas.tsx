@@ -14,6 +14,7 @@ import { useDeckStore } from "../../store/deckStore.js";
 import { JUSTIFY, TAB_FONT_STACK, SlideRenderer, elementStyle, imagePathsOf } from "./SlideRenderer.js";
 import { CanvasContextMenu, type MenuPoint } from "./CanvasContextMenu.js";
 import { useDeckAssets } from "./useDeckAssets.js";
+import { measureEditor } from "./measureEditor.js";
 import { Button, Field } from "../controls.js";
 import { Icon } from "../icons.js";
 
@@ -169,17 +170,9 @@ export function SlideCanvas() {
   useLayoutEffect(() => {
     const field = editorRef.current;
     if (!field) return;
-    field.style.height = "auto";
-    setEditorHeight(field.scrollHeight);
-    if (editing?.kind === "tab") {
-      // `scrollWidth` on its own can't shrink back down once the box has
-      // grown — with the old width still applied, short content never
-      // overflows, so it just reports that old width back. Collapsing first
-      // (as already done for height, above) is what lets it re-measure the
-      // *current* content's true natural width, in either direction.
-      field.style.width = "1px";
-      setEditorWidth(field.scrollWidth);
-    }
+    const natural = measureEditor(field, editing?.kind === "tab");
+    setEditorHeight(natural.height);
+    if (natural.width !== null) setEditorWidth(natural.width);
     // Only set by `insertBend`. Plain typing leaves this null and the browser
     // manages the caret itself; a programmatic text change would otherwise
     // reset it to the end, right after whatever was just inserted.
