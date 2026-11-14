@@ -43,7 +43,7 @@ export default function App() {
     if (attached) void restoreSongs();
   }, [attached, restoreSongs]);
 
-  if (screen === "ug") return <Suspense fallback={<Centered>טוען את סוכן האקורדים…</Centered>}><UltimateGuitarAgent onBack={() => setScreen("decks")} onDeckCreated={() => setScreen("editor")} /></Suspense>;
+  if (screen === "ug") return <Suspense fallback={<Centered>Loading the chord agent…</Centered>}><UltimateGuitarAgent onBack={() => setScreen("decks")} onDeckCreated={() => setScreen("editor")} /></Suspense>;
 
   if (!supported) {
     return (
@@ -83,7 +83,7 @@ export default function App() {
             {attaching ? "Opening…" : usingFallbackStorage ? "Get started" : "Open folder"}
           </Button>
           {error && <p className="max-w-sm text-center text-xs text-danger">{error}</p>}
-          <Button variant="subtle" className="mt-3" onClick={() => setScreen("ug")}>סוכן אקורדים · Ultimate Guitar</Button>
+          <Button variant="subtle" className="mt-3" onClick={() => setScreen("ug")}>Chord agent · Ultimate Guitar</Button>
         </div>
       </Centered>
     );
@@ -125,7 +125,7 @@ export default function App() {
     <div>
       <DeckLibraryScreen onOpen={() => setScreen("editor")} />
       <div className="mx-auto flex max-w-3xl gap-6 px-10 pb-10">
-        <Button variant="subtle" size="sm" onClick={() => setScreen("ug")}>סוכן אקורדים · Ultimate Guitar</Button>
+        <Button variant="subtle" size="sm" onClick={() => setScreen("ug")}>Chord agent · Ultimate Guitar</Button>
         <Button variant="subtle" size="sm"
           onClick={() => setScreen("songs")}
         >

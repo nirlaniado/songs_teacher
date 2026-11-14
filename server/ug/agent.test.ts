@@ -21,7 +21,7 @@ const official: TabCandidate = { ...community, id: "2", official: true };
 function harness(candidates: TabCandidate[]) {
   const browser = { setProgress: vi.fn(), login: vi.fn(async () => {}), search: vi.fn(async () => candidates),
     inspect: vi.fn(async (c: TabCandidate) => c), close: vi.fn(async () => {}),
-    extract: vi.fn(async (source: TabCandidate, selection: ChordResult["selection"]): Promise<ChordResult> => ({ source, selection, retrievedAt: new Date().toISOString(), warning: source.official ? null : "זו גרסת משתמשים ולא גרסה רשמית; ייתכנו אי־דיוקים.", capo: null, tuning: null, key: null, lines: [], uniqueChords: ["C"], chart: "C" })) };
+    extract: vi.fn(async (source: TabCandidate, selection: ChordResult["selection"]): Promise<ChordResult> => ({ source, selection, retrievedAt: new Date().toISOString(), warning: source.official ? null : "This is a user version, not an official one, so it may contain inaccuracies.", capo: null, tuning: null, key: null, lines: [], uniqueChords: ["C"], chart: "C" })) };
   const save = vi.fn(async () => {});
   const agent = new GuitarAgent(browser, async () => ({ title: "Test", artist: "Artist" }), save);
   return { agent, browser, save };
@@ -50,7 +50,7 @@ describe("agent workflow", () => {
     const job = agent.start("Test - Artist"); await vi.waitFor(() => expect(job.status).toBe("needs_choice"));
     expect(() => agent.resume(job.id, "false:999")).toThrow();
     agent.resume(job.id, "false:1"); await vi.waitFor(() => expect(job.status).toBe("done"));
-    expect(job.result?.selection).toBe("user_selected"); expect(job.result?.warning).toContain("לא גרסה רשמית");
+    expect(job.result?.selection).toBe("user_selected"); expect(job.result?.warning).toContain("not an official one");
   });
   it("does not treat an incomplete search as no Official version", async () => {
     const { agent, browser } = harness([community]);
@@ -96,7 +96,7 @@ describe("identifySong", () => {
   it("reports a missing OpenRouter key as a configuration error without calling the model", async () => {
     config.agentApiKey = undefined;
     const error = await rejection(identifySong("yellow"));
-    expect(error).toBeInstanceOf(AgentError); expect(error.code).toBe("configuration"); expect(error.message).toContain("OPENROUTER_API_KEY");
+    expect(error).toBeInstanceOf(AgentError); expect(error.code).toBe("configuration"); expect(error.message).toContain("OPENROUTER_API_KEY"); expect(error.message).toContain("npm start");
     expect(create).not.toHaveBeenCalled();
   });
   it("maps a clarify call to a clarification error", async () => {
@@ -128,11 +128,11 @@ describe("identifySong", () => {
   it("gives a rate-limit message for HTTP 429 instead of the generic quota message", async () => {
     create.mockRejectedValue(new OpenAI.APIError(429, undefined, "rate limited", new Headers()));
     const error = await rejection(identifySong("yellow"));
-    expect(error.code).toBe("model_api"); expect(error.message).toContain("מגבלת השימוש החינמית"); expect(error.message).not.toContain("בדוק מפתח API");
+    expect(error.code).toBe("model_api"); expect(error.message).toContain("free usage limit"); expect(error.message).not.toMatch(/api key/i);
   });
   it("keeps the generic model_api message for other API errors", async () => {
     create.mockRejectedValue(new OpenAI.APIError(401, undefined, "unauthorized", new Headers()));
     const error = await rejection(identifySong("yellow"));
-    expect(error.code).toBe("model_api"); expect(error.message).toContain("HTTP 401"); expect(error.message).toContain("בדוק מפתח API");
+    expect(error.code).toBe("model_api"); expect(error.message).toContain("HTTP 401"); expect(error.message).toContain("Check the API key");
   });
 });
