@@ -7,7 +7,9 @@ const plain: Hasher = { hash: async (p) => `h:${p}`, verify: async (h, p) => h =
 describe("Auth", () => {
   it("stores only a hash of the session token", async () => {
     const store = new MemoryStore();
-    const { token } = await new Auth(store, plain).signup("alice", "password123");
+    const auth = new Auth(store, plain);
+    await auth.init();
+    const { token } = await auth.signup("alice", "password123");
     expect(await store.findSession(token)).toBeNull();
     expect(await store.findSession(sessionId(token))).not.toBeNull();
   });
@@ -28,7 +30,9 @@ describe("Auth", () => {
   it("verifies against a dummy hash when the username is unknown", async () => {
     const calls: string[] = [];
     const spy: Hasher = { hash: plain.hash, verify: async (h, p) => { calls.push(h); return plain.verify(h, p); } };
-    expect(await new Auth(new MemoryStore(), spy).login("nobody", "password123")).toBeNull();
+    const auth = new Auth(new MemoryStore(), spy);
+    await auth.init();
+    expect(await auth.login("nobody", "password123")).toBeNull();
     expect(calls).toHaveLength(1);
   });
 

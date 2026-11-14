@@ -108,8 +108,10 @@ src/
 
 server/
 ├── ug/               the chord agent's local service (port 4318)
-└── api/              optional accounts backend (port 4319) — Fastify + Drizzle + MySQL
+└── api/              accounts backend (port 4319) — Fastify + Drizzle + MySQL
     ├── app.ts          routes, cookie, rate limit; buildApp() takes any AuthStore
+    ├── throttle.ts     per-username login lockout
+    ├── proxy.ts        the Vite proxy entry for /api/auth and /api/health
     ├── auth.ts         argon2id hashing, 30-day sessions, constant-work login
     ├── rules.ts        the one Zod schema for usernames and passwords
     ├── store.ts        AuthStore interface + the in-memory fake the tests use
@@ -118,10 +120,11 @@ server/
     └── server.ts       entry point, listens on 127.0.0.1:4319
 ```
 
-## Accounts backend (optional)
+## Accounts backend
 
 A small Fastify service in `server/api/` that gives users username/password accounts in
-MySQL. The editor works the same without it; no deck, song or audio is stored on the server.
+MySQL. No deck, song or audio is stored on the server. Until the editor is gated behind
+login (issue #36), it still runs without the backend.
 
 1. Have a MySQL 8.0.13+ server somewhere (the app assumes nothing about where) and an empty
    database for it.
@@ -140,9 +143,16 @@ MySQL. The editor works the same without it; no deck, song or audio is stored on
 
 Usernames are 3–32 letters, digits, `_` or `-`, unique ignoring case; passwords are at
 least 10 characters with no composition rules. Passwords are hashed with argon2id. The
-session cookie is `httpOnly`, `SameSite=Lax`, `Secure` off localhost, and lasts 30 days; the
-database keeps only a SHA-256 of the cookie token. Signup and login are rate-limited to 10
-attempts per minute per client IP.
+session cookie is `httpOnly`, `SameSite=Lax`, `Secure` whenever the original request was
+HTTPS, and lasts 30 days; the database keeps only a SHA-256 of the cookie token. Signup and
+login are rate-limited to 10 attempts per minute per client IP, and a username is locked
+for 15 minutes after 5 failed logins from any IP.
+
+Behind a proxy, set `TRUST_PROXY` (see `.env.example`) — `loopback` for the Vite proxy on
+the same machine, plus a TLS terminator's address if there is one. That is what lets the
+API see the real client IP and know the request was HTTPS. The Vite proxy appends the
+client to `X-Forwarded-For` and keeps an upstream `X-Forwarded-Proto`/`Host` rather than
+overwriting them. A public hostname in front of Vite also needs Vite's `server.allowedHosts`.
 
 After changing `server/api/schema.ts`, run `npm run api:generate` to write a new migration
 and commit it. `npm test` needs no database; the MySQL store's own test runs only when

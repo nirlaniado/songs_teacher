@@ -2,28 +2,35 @@ import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { Auth, type Hasher } from "./auth.js";
+import type { TrustProxy } from "./config.js";
 import { Credentials } from "./rules.js";
 import { UsernameTaken, type AuthStore } from "./store.js";
+import { LoginThrottle } from "./throttle.js";
 
 export const COOKIE = "session";
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 export interface AppOptions {
   store: AuthStore | null;
   hasher?: Hasher;
   now?: () => number;
-  /** Attempts per IP per window on signup and login. */
+  /** Attempts per client IP per window on signup and login. */
   rateLimit?: { max: number; timeWindow: number };
+  /** Failed logins allowed per username per window, from any IP. */
+  lockout?: { max: number; windowMs: number };
+  /** Which proxies may set X-Forwarded-*; decides the client IP and whether the request was HTTPS. */
+  trustProxy?: TrustProxy;
   logger?: boolean | { level: string };
 }
 
 export async function buildApp(options: AppOptions) {
-  const app = Fastify({ logger: options.logger ?? false, bodyLimit: 8192 });
+  const app = Fastify({ logger: options.logger ?? false, bodyLimit: 8192, trustProxy: options.trustProxy ?? false });
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
   const limit = { rateLimit: options.rateLimit ?? { max: 10, timeWindow: 60_000 } };
   const store = options.store;
   const auth = store && new Auth(store, options.hasher, options.now);
+  await auth?.init();
+  const throttle = new LoginThrottle(options.lockout?.max, options.lockout?.windowMs, options.now);
 
   app.addHook("onSend", async (_req, reply) => { reply.header("Cache-Control", "no-store"); });
 
@@ -57,9 +64,18 @@ export async function buildApp(options: AppOptions) {
 
     routes.post("/api/auth/login", { config: limit }, async (req, reply) => {
       const input = Credentials.safeParse(req.body);
+      if (input.success) {
+        const wait = throttle.lockedFor(input.data.username);
+        if (wait) return reply.code(429).header("Retry-After", Math.ceil(wait / 1000))
+          .send({ error: "Too many failed attempts for this account. Try again later." });
+      }
       // Malformed credentials get the same answer as wrong ones.
       const session = input.success ? await auth!.login(input.data.username, input.data.password) : null;
-      if (!session) return reply.code(401).send({ error: "Wrong username or password." });
+      if (!session) {
+        if (input.success) throttle.fail(input.data.username);
+        return reply.code(401).send({ error: "Wrong username or password." });
+      }
+      throttle.succeed(input.data!.username);
       setSession(req, reply, session.token, session.expiresAt);
       return { user: session.user };
     });
@@ -88,7 +104,8 @@ export async function buildApp(options: AppOptions) {
 }
 
 function cookieOptions(req: FastifyRequest) {
-  return { path: "/", httpOnly: true, sameSite: "lax" as const, secure: !LOCAL_HOSTS.has(req.hostname) };
+  // `protocol` honours X-Forwarded-Proto only from a trusted proxy (see trustProxy).
+  return { path: "/", httpOnly: true, sameSite: "lax" as const, secure: req.protocol === "https" };
 }
 
 function setSession(req: FastifyRequest, reply: FastifyReply, token: string, expiresAt: Date) {

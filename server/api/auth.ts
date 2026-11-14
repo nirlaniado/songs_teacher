@@ -13,8 +13,13 @@ export function sessionId(token: string) {
 }
 
 export class Auth {
-  private dummyHash: Promise<string> | undefined;
+  private dummyHash: string | undefined;
   constructor(private store: AuthStore, private hasher: Hasher = argon2, private now = () => Date.now()) {}
+
+  /** Computes the dummy hash up front, so the first unknown-username login does no extra work. */
+  async init() {
+    this.dummyHash ??= await this.hasher.hash(randomBytes(16).toString("hex"));
+  }
 
   async signup(username: string, password: string) {
     const user = await this.store.createUser(username, await this.hasher.hash(password));
@@ -24,8 +29,8 @@ export class Auth {
   async login(username: string, password: string) {
     const record = await this.store.findUser(username);
     // An unknown username still pays for one verify, so response time doesn't reveal which usernames exist.
-    this.dummyHash ??= this.hasher.hash(randomBytes(16).toString("hex"));
-    const ok = await this.hasher.verify(record?.passwordHash ?? await this.dummyHash, password);
+    if (!this.dummyHash) throw new Error("Auth.init() must run before login.");
+    const ok = await this.hasher.verify(record?.passwordHash ?? this.dummyHash, password);
     if (!record || !ok) return null;
     const user = { id: record.id, username: record.username };
     return { user, ...(await this.startSession(user)) };

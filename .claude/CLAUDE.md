@@ -469,6 +469,13 @@ Break these and the design stops working. Each was argued through, not defaulted
   exist on the load path — `attach()` outside a user gesture throws.
 - **`section.key` matters more than it looks** (song-study). A wrong key silently poisons
   every graph edge derived from that section.
+- **Behind a proxy, the API only knows what `TRUST_PROXY` lets it believe.** The `Secure`
+  cookie flag comes from `request.protocol` and rate limits key on `request.ip`; both read
+  `X-Forwarded-*` only from a trusted hop. Deciding `Secure` from the Host header was the
+  first attempt and was wrong: Vite's string proxy rewrites Host to `127.0.0.1`. Fastify reads
+  the *last* `X-Forwarded-Proto` entry, so the Vite proxy must not append its own `http`
+  after a TLS terminator's `https` — which is why it isn't plain `xfwd: true`.
+  `proxy.test.ts` runs a real Vite proxy and fails for both the string form and `xfwd`.
 - **Don't put `currentTime` in React state**, and don't use `timeupdate` (see the stack
   table).
 
@@ -527,6 +534,8 @@ server/
 └── api/              accounts backend (127.0.0.1:4319)
     ├── app.ts        buildApp({store}) — routes, cookie flags, rate limit, health
     ├── auth.ts       argon2id, 30-day sessions, dummy-hash verify for unknown users
+    ├── throttle.ts   per-username lockout: 5 failed logins → 15 min, from any IP
+    ├── proxy.ts      Vite proxy entry: appends X-Forwarded-For, keeps upstream -Proto/-Host
     ├── rules.ts      the one Zod schema for username/password
     ├── store.ts      AuthStore interface + MemoryStore (the tests' fake)
     ├── db.ts · schema.ts   MySqlStore + Drizzle tables (users, sessions)
