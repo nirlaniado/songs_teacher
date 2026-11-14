@@ -105,7 +105,7 @@ src/
 
 ## Ultimate Guitar chord agent
 
-The **סוכן אקורדים · Ultimate Guitar** button is available on the start screen,
+The **Chord agent · Ultimate Guitar** button is available on the start screen,
 even before opening a library. The agent uses your Ultimate Guitar account as its
 only chord source. A free OpenRouter model identifies the song and calls a constrained search
 tool; local TypeScript code chooses the version and extracts the actual chart.
@@ -148,7 +148,7 @@ this personal account service is not designed for public deployment.
 The browser signs in once and keeps its session in `.ug-agent/profile`. On a desktop
 it opens a visible window; on Linux without a display it defaults to headless.
 For a CAPTCHA or extra authentication, run with `UG_HEADLESS=false` on a machine
-with a display, finish the site's prompt, then press **השלמתי התחברות — המשך**.
+with a display, finish the site's prompt, then press **I've logged in — Continue**.
 Do not run two agents against the same profile simultaneously.
 
 Selection and provenance:
@@ -163,7 +163,7 @@ Selection and provenance:
   Official link discovered on a community page takes precedence too.
 - Missing view counts, ties, multiple Official versions, or ambiguous song matches
   prompt a choice. Network errors and incomplete searches stop the lookup.
-- Every community result carries a visible Hebrew warning that it is unofficial
+- Every community result carries a visible warning that it is unofficial
   and may contain inaccuracies. Results include source URL, version, views, selection
   reason, retrieval time, capo/tuning/key when available, sections and chord order.
 
