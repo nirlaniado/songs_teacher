@@ -1,18 +1,32 @@
 // @vitest-environment jsdom
-import { cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { Slide, Theme } from "../../schema/deck.js";
-import { appearanceDifferences, computed, installAppCss, openDeck, slideContentStyles, slideLayers, stubResizeObserver } from "../../test/dom.js";
-import { DeckThumbnail } from "../DeckLibraryScreen.js";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { SLIDE_H, SLIDE_W, Slide, Theme, summarizeDeck } from "../../schema/deck.js";
+import { useDeckStore } from "../../store/deckStore.js";
+import { appearanceDifferences, computed, installAppCss, openDeck, slideLayers, slideScale, slideStyles, stubResizeObserver } from "../../test/dom.js";
+import { DeckLibraryScreen } from "../DeckLibraryScreen.js";
 import { PresentMode } from "./PresentMode.js";
 import { SlideCanvas } from "./SlideCanvas.js";
 import { SlidePanel } from "./SlidePanel.js";
 import { SlideRenderer } from "./SlideRenderer.js";
 
-// Hard rule 0: one renderer, mounted at several scales, must draw the same slide everywhere. These mount the
-// real parents under the app's real stylesheet and compare every computed style jsdom resolves for the slide's
-// content — selector matches, inheritance, `::after` — against the same slide rendered on its own. jsdom does no
-// layout or painting, so overlap and paint order are out of reach here; everything a CSS rule can set is not.
+// Hard rule 0: one renderer, mounted at several scales, must draw the same slide everywhere. These mount the real
+// parents under the app's compiled stylesheet and compare every computed style jsdom resolves — selector matches,
+// inheritance, `::after` — for SlideRenderer's surface, its scaled layer and the slide's content, against the same
+// slide rendered on its own at the same scale. jsdom does no layout and no painting: what a box ends up measuring,
+// what overlaps what and in which order things paint are out of reach here.
+//
+// The canvas and Present size the slide to their own box, read with getBoundingClientRect, which jsdom always
+// reports as 0×0. It is STUBBED below to a fixed box so those two have a real scale to assert.
+const BOX = { width: 688, height: 408 };
+const EXPECTED_SCALE = {
+  rail: 0.115, // SlidePanel's THUMB_SCALE
+  libraryRow: 0.1, // DeckLibraryScreen's ROW_THUMB_SCALE
+  libraryCard: 0.125, // DeckLibraryScreen's CARD_THUMB_SCALE
+  canvas: Math.min((BOX.width - 48) / SLIDE_W, (BOX.height - 48) / SLIDE_H), // "fit": the box, less a 48px margin
+  present: Math.min(BOX.width / SLIDE_W, BOX.height / SLIDE_H), // fills the box, aspect kept
+};
+const rect = Object.getOwnPropertyDescriptor(Element.prototype, "getBoundingClientRect")!;
 
 const theme = Theme.parse({ background: { kind: "color", color: "#fafafa" }, text: "#222222" });
 const slide = Slide.parse({
@@ -35,58 +49,98 @@ let CONTENT = 0;
 beforeAll(async () => {
   stubResizeObserver();
   await installAppCss();
+  Element.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: BOX.width, bottom: BOX.height, ...BOX, toJSON() {} }) as DOMRect;
   const { container } = render(<SlideRenderer slide={slide} theme={theme} scale={1} assetUrls={assetUrls} />);
   CONTENT = slideLayers(container)[0]!.children.length;
   cleanup();
   expect(CONTENT).toBeGreaterThan(slide.elements.length);
 });
+afterAll(() => Object.defineProperty(Element.prototype, "getBoundingClientRect", rect));
 afterEach(cleanup);
 
-/** The slide's content styles inside `container`, once its image has resolved. */
-async function contentIn(container: HTMLElement) {
+/** The one mounted slide in `container`, once its image has resolved. */
+async function layerIn(container: HTMLElement) {
   await waitFor(() => expect(container.querySelector('img[src="blob:test/assets/a.png"]')).not.toBeNull());
   const layers = slideLayers(container);
   expect(layers).toHaveLength(1);
-  return slideContentStyles(layers[0]!, CONTENT);
+  return layers[0]!;
 }
 
-async function alone(scale: number) {
-  const { container } = render(<SlideRenderer slide={slide} theme={theme} scale={scale} assetUrls={assetUrls} />);
-  const styles = await contentIn(container);
+/** The slide drawn on its own at `scale`, with the class the mount gave its surface, so only the mount's surroundings differ. */
+async function alone(scale: number, className?: string) {
+  const { container } = render(<SlideRenderer slide={slide} theme={theme} scale={scale} assetUrls={assetUrls} className={className} />);
+  const styles = slideStyles(await layerIn(container), CONTENT);
   cleanup();
   return styles;
 }
 
+/** The surface is 1280·scale × 720·scale and the layer is scaled by exactly `scale` (compared as numbers: CSS rounds). */
+function expectScale({ width, height, transform }: ReturnType<typeof slideScale>, scale: number) {
+  const factor = /^scale\(([^)]*)\)$/.exec(transform)?.[1];
+  expect({ width: parseFloat(width), height: parseFloat(height), scale: Number(factor) }).toEqual({
+    width: expect.closeTo(SLIDE_W * scale, 6), height: expect.closeTo(SLIDE_H * scale, 6), scale: expect.closeTo(scale, 9),
+  });
+}
+
+function openLibrary(view: "list" | "grid") {
+  const deck = openDeck([slide], theme);
+  act(() => useDeckStore.setState({ decks: [summarizeDeck(deck)], loadingDecks: false, libraryView: view, error: null }));
+}
+
+const MOUNTS = [
+  ["the thumbnail rail", EXPECTED_SCALE.rail, () => { openDeck([slide], theme); return <SlidePanel />; }],
+  ["the editor canvas", EXPECTED_SCALE.canvas, () => { openDeck([slide], theme); return <SlideCanvas />; }],
+  ["Present", EXPECTED_SCALE.present, () => { openDeck([slide], theme); return <PresentMode onExit={() => {}} />; }],
+  ["a library row", EXPECTED_SCALE.libraryRow, () => { openLibrary("list"); return <DeckLibraryScreen onOpen={() => {}} />; }],
+  ["a library card", EXPECTED_SCALE.libraryCard, () => { openLibrary("grid"); return <DeckLibraryScreen onOpen={() => {}} />; }],
+] as const;
+
+/** Mounts `place` and returns its slide layer next to the slide drawn on its own at the same scale and surface class. */
+async function mounted(mount: () => React.ReactElement) {
+  const { container } = render(mount());
+  const layer = await layerIn(container);
+  const got = slideStyles(layer, CONTENT);
+  const { className } = layer.parentElement!;
+  const scale = Number(/^scale\((.*)\)$/.exec(layer.style.transform)![1]);
+  const measured = slideScale(layer);
+  cleanup();
+  return { got, reference: await alone(scale, className || undefined), measured };
+}
+
 describe("a slide looks the same in every place it is mounted", () => {
-  it("is the same on its own at every scale it is mounted at", async () => {
-    const reference = await alone(1);
-    expect(slideLayers(document).length).toBe(0);
-    for (const scale of [0.1, 0.115, 0.125, 0.6, 1.125]) expect(await alone(scale)).toEqual(reference);
+  it("draws the same content at every scale it is mounted at, sized to that scale", async () => {
+    const scaleFree = (nodes: Awaited<ReturnType<typeof alone>>) => nodes.map(({ path, style }) => {
+      const { width: _w, height: _h, "inline-size": _i, "block-size": _b, transform: _t, "transform-origin": _o, ...rest } = style;
+      return { path, style: path === "surface" || path === "layer" ? rest : style };
+    });
+    const reference = scaleFree(await alone(1));
+    for (const scale of Object.values(EXPECTED_SCALE)) {
+      const { container } = render(<SlideRenderer slide={slide} theme={theme} scale={scale} assetUrls={assetUrls} />);
+      const layer = await layerIn(container);
+      expectScale(slideScale(layer), scale);
+      expect(scaleFree(slideStyles(layer, CONTENT))).toEqual(reference);
+      cleanup();
+    }
+  });
+
+  it.each(MOUNTS)("in %s, at its own scale, matches the slide drawn on its own", async (_place, scale, mount) => {
+    const { got, reference, measured } = await mounted(mount);
+    expectScale(measured, scale);
+    expect(appearanceDifferences(reference, got)).toEqual([]);
   });
 
   it.each([
-    ["the thumbnail rail", () => <SlidePanel />],
-    ["the editor canvas", () => <SlideCanvas />],
-    ["Present", () => <PresentMode onExit={() => {}} />],
-    ["a library card", () => <DeckThumbnail cover={{ slide, theme }} scale={0.125} assetUrls={assetUrls} />],
-  ])("in %s, matches the slide drawn on its own", async (_place, mount) => {
-    const reference = await alone(1);
-    openDeck([slide], theme);
-    const { container } = render(mount());
-    expect(appearanceDifferences(reference, await contentIn(container))).toEqual([]);
-  });
-
-  it("would notice a stylesheet rule reaching into a mounted slide", async () => {
-    openDeck([slide], theme);
+    [".slide-thumb img { opacity: .5 }", /^layer>.*>img\[0\] opacity: 1 -> 0\.5$/],
+    [".slide-thumb .ring-line { opacity: .5 }", /^surface opacity: 1 -> 0\.5$/],
+  ])("would notice %s reaching into a mounted slide", async (rule, difference) => {
     const leak = document.createElement("style");
-    leak.textContent = ".slide-thumb img { opacity: .5 }";
+    leak.textContent = rule;
     document.head.append(leak);
     try {
-      const reference = await alone(1);
-      const { container } = render(<SlidePanel />);
-      const differences = appearanceDifferences(reference, await contentIn(container));
+      const { got, reference } = await mounted(MOUNTS[0][2]);
+      const differences = appearanceDifferences(reference, got);
       expect(differences).toHaveLength(1);
-      expect(differences[0]).toMatch(/>img\[0\] opacity: 1 -> 0\.5$/);
+      expect(differences[0]).toMatch(difference);
     } finally {
       leak.remove();
     }
