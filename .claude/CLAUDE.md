@@ -9,6 +9,11 @@ in it. Press Present and the track plays while the deck follows along, so a "son
 presentation" (intro at 0:00, verse 1 at 1:20, chorus at 2:22) runs itself while the
 teacher talks over it.
 
+**It is becoming a small SaaS.** People sign in to use the editor, and an accounts backend
+(`server/api/`: Node, Fastify, MySQL) manages users. The current phase is **user management
+only** — decks and audio still live on each person's own machine; storing them on the server,
+payments, and offering the chord agent on the hosted service are later decisions for the owner.
+
 Everything is authored by hand. There is no assistant, no generation pipeline, no MCP
 server and no model-driven editing — all of those were removed. Stem separation remains:
 it is local signal processing (an ONNX model run in the browser), not an assistant.
@@ -17,11 +22,9 @@ Secondary and older: a song-study mode for marking sections of a track and writi
 harmonic analysis, plus a knowledge graph linking songs by shared harmony. Still works,
 reachable from the start screen, no longer what the app is for.
 
-**Optional backend: accounts.** `server/api/` is a small Fastify service giving users
-username/password accounts in MySQL (approved by the owner). It is strictly optional: the
-editor never calls it, works unchanged without it, and nothing requires signing in. It
-stores users and sessions only — no decks, songs or audio live on the server. No email,
-password reset or third-party sign-in.
+**The accounts backend** (`server/api/`) stores users and sessions only — no decks, songs or
+audio live on the server. No email, password reset or third-party sign-in yet. Until the
+editor is gated behind login (issue #36), it still runs without the backend.
 
 ### Product direction
 
@@ -29,6 +32,23 @@ The native React/TypeScript editor is the sole editing path. The experimental
 LibreOfficeKit integration is retired. Do not reintroduce a LibreOffice runtime,
 C++ host, headless converter or parallel editor. Do not reintroduce an assistant,
 pipeline or other AI-driven feature unless the user asks for it.
+
+**Accounts (decided by the owner, 2026-11-14).** Build everything to the standard of a
+service strangers reach over the internet, even before it is hosted: HTTPS assumed,
+per-account lockout, no shortcut that only holds on localhost.
+
+- Username + password. **No email** — there is no self-service reset; the admin resets
+  passwords from the admin panel (temporary password, the user's sessions revoked, forced
+  change at next login).
+- Sign-up is open. Self-service covers change password, sign out everywhere, delete own
+  account.
+- **One admin: the owner's account**, named by `ADMIN_USERNAME` in `.env`, refused at public
+  sign-up and created by a command. The role cannot be granted through the website. The
+  admin-only panel lists, disables, enables and deletes users and resets passwords; the admin
+  account itself cannot be disabled or deleted, and every admin action is written to an audit
+  table.
+- The chord agent stays a local-only feature: it logs in with one personal Ultimate Guitar
+  account and is not offered on the hosted service.
 
 ### About the name
 
@@ -347,13 +367,15 @@ Break these and the design stops working. Each was argued through, not defaulted
    document and eat undo slots for something nobody wants to undo. Same reasoning as the
    graph index: derived or ephemeral things stay out of the saved file. `deckStore.test.ts`
    guards this for the view state.
-9. **Docker files belong to the owner.** Agents do not create a Dockerfile, compose file
-   or any other container config. Where MySQL (or anything else) runs is the owner's
-   decision; code reads `DATABASE_URL` and assumes nothing else.
-10. **The accounts backend stays optional.** `src/` never imports from `server/`, and no
-    editor feature may depend on being signed in or on the backend being up. Auth DB
-    changes go through a new Drizzle migration in `server/api/migrations/`, never an edit
-    to a committed one.
+9. **Docker files, CI workflows and secrets belong to the owner.** Agents do not create a
+   Dockerfile, compose file, other container config, or anything under `.github/workflows/`.
+   Where MySQL (or anything else) runs is the owner's decision; code reads `DATABASE_URL`
+   and assumes nothing else.
+10. **The editor requires a signed-in user; `src/` never imports from `server/`.** The two
+    sides share only types (`src/ug/types.ts` is the existing pattern) and talk over HTTP.
+    Auth database changes go in a **new** Drizzle migration in `server/api/migrations/`,
+    never an edit to a committed one — a database somewhere has already run it.
+
 
 ---
 
@@ -502,7 +524,7 @@ src/
 
 server/
 ├── ug/               chord agent's local service (127.0.0.1:4318)
-└── api/              optional accounts backend (127.0.0.1:4319)
+└── api/              accounts backend (127.0.0.1:4319)
     ├── app.ts        buildApp({store}) — routes, cookie flags, rate limit, health
     ├── auth.ts       argon2id, 30-day sessions, dummy-hash verify for unknown users
     ├── rules.ts      the one Zod schema for username/password
@@ -541,7 +563,12 @@ LibreOffice integration is retired.
 ## Agent team
 
 Development runs as a small agent team inside Herdr. The user does **all** devops: they own the
-remote, merges, CI secrets, tokens and releases. Agents only ever produce reviewed branches.
+remote's settings, Docker and compose files, CI workflows, secrets, tokens and releases.
+
+**Merging is delegated to `pm` (owner's decision, 2026-11-14, until they say otherwise).**
+`pm` merges a PR once the gate below has passed; the user no longer has to. Still the user's
+alone: tokens and secrets, Docker/compose files, CI workflows, repository settings such as
+branch protection, force pushes, and deleting a branch with unmerged work.
 
 | Seat | Model | Role |
 |---|---|---|
@@ -551,7 +578,7 @@ remote, merges, CI secrets, tokens and releases. Agents only ever produce review
 
 Each seat's standing prompt is a committed file in `.herdr/seats/`. **Only `pm` may write there** —
 a seat cannot edit its own constraints, and because every change reaches the default branch
-through a PR the user merges, the gate enforces that even if the instruction is ignored.
+through a PR that `pm` merges, the gate enforces that even if the instruction is ignored.
 
 **Isolation:** the worktree is a seat's permanent desk (`node_modules` stays installed, cwd never
 moves); the branch is the disposable task (`feat/<issue-number>`, one atomic merge each). Only `pm`
@@ -561,25 +588,25 @@ touches the default-branch checkout. A fresh worktree needs its own `npm install
 **Board:** GitHub Issues, single source of truth. The brief lives in the issue body; issues
 labelled `devops` are assigned to the user.
 
-**Gate order, cheapest first** — the reviewer is the second most expensive gate and the user is
-the most expensive:
+**Gate order, cheapest first:**
 
 1. `npm test` + `npm run typecheck` locally in the worktree
-2. push `feat/<n>` → `ci.yml` proves it on a clean machine (this is the only gate that catches a
-   new file the implementer forgot to `git add`)
-3. green → `review` audits the diff, with CI's result as evidence
-4. sign-off → `pm` opens the PR → `main.yml` runs on it → the user merges
+2. push `feat/<n>` → `pm` clones the branch fresh and runs `npm ci`, the tests and the typecheck.
+   There is no CI: the workflows were removed and are the owner's to re-add. The fresh clone
+   stands in for it, and is the only gate that catches a new file the implementer forgot to
+   `git add`
+3. green → `review` audits the diff, with the fresh-clone result as evidence
+4. sign-off → `pm` opens the PR and merges it, then reports to the user
+5. backend changes additionally pass against a real MySQL (`DATABASE_URL`) before merging
 
 **Hub and spoke:** seats never prompt each other. Every handoff routes through `pm`. An
 agent-to-agent chain has no supervisor and can deadlock with nothing on screen.
 
-**Escalation:** `pm` decides naming, style, test placement and scope trims. The user decides a
-`CLAUDE.md` hard-rule dispute, any schema/migration or architectural change, anything
-security-touching, and any `dev`/`review` disagreement still live after one exchange. A `blocked`
-agent raises a desktop notification and waits — `pm` answers **nothing** on the user's behalf, not a
-tool-permission prompt and not a question the seat aims at `pm` itself. A recommendation is fine; a
-keypress in that pane is not.
+**Escalation:** `pm` decides naming, style, test placement, scope trims, `dev`/`review`
+disagreements, and whether a reviewed change merges. `pm` also answers a seat's routine
+`blocked` prompt itself — fetching, running tests, reading files, installing project
+dependencies. `pm` brings to the user: anything destructive, anything touching credentials, a
+change of product direction, and everything on the owner-only list above.
 
 **Concurrency:** one `dev` seat; a second only once the merge queue clears comfortably; hard cap
-of two. The user is the only merger, so extra branches lengthen their queue rather than shipping
-more.
+of two.

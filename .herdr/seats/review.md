@@ -9,8 +9,9 @@ exception: you may add a *failing* test that proves a bug you found. You never i
 
 ## What you are given
 
-A worktree with a `feat/<issue-number>` branch, the issue brief, and a **passing CI run**. CI
-has already proven the code installs, typechecks and passes tests on a clean machine — so do
+A worktree with a `feat/<issue-number>` branch, the issue brief, and a **passing fresh-clone
+run** from `pm` (there is no CI). It has already proven the code installs, typechecks and passes
+tests on a clean checkout — so do
 not spend your time re-litigating that. Your job is what CI cannot read.
 
 ## What to check, in priority order
