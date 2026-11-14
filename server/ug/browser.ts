@@ -26,7 +26,7 @@ export class GuitarBrowser {
         acceptDownloads: false,
       });
     } catch {
-      throw new AgentError("browser_start", "לא ניתן להפעיל Chromium. הרץ npm run ug:install-browser וסגור מופע אחר של הסוכן אם קיים.");
+      throw new AgentError("browser_start", "Chromium could not start. Run npm run ug:install-browser, and close any other running copy of the agent.");
     }
     this.page = this.context.pages()[0] ?? await this.context.newPage();
     this.page.setDefaultTimeout(12_000);
@@ -55,8 +55,8 @@ export class GuitarBrowser {
     } catch {
       const challenge = await page.getByText(/verify you are human|checking your browser|just a moment|captcha/i).count();
       throw new AgentError(challenge ? "needs_login" : "site_changed", challenge
-        ? "נדרש אימות בדפדפן של הסוכן. השלם אותו ולחץ המשך."
-        : "מבנה העמוד לא זוהה או שהטעינה נכשלה. לא בוצע חילוץ.");
+        ? "Verification is needed in the agent's browser. Complete it, then press Continue."
+        : "The page layout was not recognised or the page failed to load. Nothing was extracted.");
     }
   }
 
@@ -65,17 +65,17 @@ export class GuitarBrowser {
     const page = await this.getPage();
     let response;
     try { response = await page.goto(siteUrl(url), { waitUntil: "domcontentloaded", timeout: 45_000 }); }
-    catch { throw new AgentError("network", "לא ניתן לטעון את Ultimate Guitar. בדוק את החיבור ונסה שוב."); }
+    catch { throw new AgentError("network", "Ultimate Guitar could not be loaded. Check your connection and try again."); }
     siteUrl(page.url());
-    if (response?.status() === 429) throw new AgentError("rate_limit", "האתר מגביל כעת בקשות. נסה שוב מאוחר יותר.");
-    if (response && response.status() >= 400) throw new AgentError("access_denied", `האתר החזיר שגיאת גישה (${response.status()}).`);
+    if (response?.status() === 429) throw new AgentError("rate_limit", "The site is limiting requests right now. Try again later.");
+    if (response && response.status() >= 400) throw new AgentError("access_denied", `The site returned an access error (${response.status()}).`);
     const html = await response?.text().catch(() => undefined);
     return { page, state: await this.state(page, html) };
   }
 
   // Checks whether the account is logged in. Otherwise tries the ENV credentials once; additional verification or failure requires manual completion.
   async login() {
-    this.progress("בודק התחברות לחשבון Ultimate Guitar…");
+    this.progress("Checking the Ultimate Guitar login…");
     const { page, state } = await this.open("https://www.ultimate-guitar.com/");
     if ((count(record(record(record(state).store).user).id) ?? 0) > 0) return;
     if (!this.loginAttempted && config.username && config.password) {
@@ -95,13 +95,13 @@ export class GuitarBrowser {
       }
     }
     throw new AgentError("needs_login", config.headless
-      ? "נדרשת התחברות או השלמת אימות. הפעל את השירות עם UG_HEADLESS=false במחשב עם תצוגה, התחבר בדפדפן ולחץ המשך."
-      : "השלם התחברות או אימות בחלון Ultimate Guitar של הסוכן, ואז לחץ המשך. בדוק גם את פרטי ההתחברות ב־ENV.");
+      ? "Login or verification is needed. Start the service with UG_HEADLESS=false on a computer with a display, log in in the browser, then press Continue."
+      : "Finish logging in or verifying in the agent's Ultimate Guitar window, then press Continue. Also check the login details in .env.");
   }
 
   // Scans search pages for the song and artist and merges duplicate results. Stops explicitly if the search exceeds ten pages or loads incompletely.
   async search(song: SongIdentity) {
-    this.progress(`מחפש באתר: ${song.title} — ${song.artist}`);
+    this.progress(`Searching the site: ${song.title} — ${song.artist}`);
     const candidates = new Map<string, TabCandidate>();
     let total = 1;
     for (let current = 1; current <= total; current++) {
@@ -109,7 +109,7 @@ export class GuitarBrowser {
       url.search = new URLSearchParams({ search_type: "title", value: `${song.title} ${song.artist}`, page: String(current) }).toString();
       const { state } = await this.open(url.href);
       const result = searchPage(state);
-      if (result.current !== current || result.total > 10) throw new AgentError("incomplete_search", "החיפוש רחב מדי או שהעמודים לא נטענו במלואם. ציין שם שיר ואמן מדויקים.");
+      if (result.current !== current || result.total > 10) throw new AgentError("incomplete_search", "The search is too broad, or its pages did not load completely. Give the exact song title and artist.");
       total = result.total;
       result.candidates.forEach(c => candidates.set(`${c.official}:${c.id}`, c));
       if (current < total) await new Promise(resolve => setTimeout(resolve, 1000));
@@ -131,14 +131,14 @@ export class GuitarBrowser {
 
   // Reads a version’s view count. If its page reveals an Official version, returns that version so it takes precedence.
   async inspect(candidate: TabCandidate) {
-    this.progress(`בודק צפיות: ${candidate.title}, גרסה ${candidate.version ?? candidate.id}`);
+    this.progress(`Checking views: ${candidate.title}, version ${candidate.version ?? candidate.id}`);
     const result = await this.tab(candidate);
     await new Promise(resolve => setTimeout(resolve, 1000));
     // A community page can reveal an Official link absent from search results.
     if (result.view.has_official_version) {
       const url = text(result.view.official_tab_url);
       const id = url.match(/-official-(\d+)$/)?.[1];
-      if (!id) throw new AgentError("incomplete_search", "האתר מציין שקיימת גרסה רשמית, אך הקישור אליה לא זוהה. לא נבחרה גרסת משתמשים.");
+      if (!id) throw new AgentError("incomplete_search", "The site says an official version exists, but its link could not be identified. No user version was chosen.");
       const official = await this.tab({ ...candidate, id, url: siteUrl(url), official: true });
       return official.candidate;
     }
@@ -147,7 +147,7 @@ export class GuitarBrowser {
 
   // Reads chord text or opens the Official Chords view, then returns chords with source details, capo, tuning, and an unofficial-version warning when applicable.
   async extract(candidate: TabCandidate, selection: ChordResult["selection"]): Promise<ChordResult> {
-    this.progress(candidate.official ? "מחלץ אקורדים מהגרסה הרשמית…" : "מחלץ אקורדים מגרסת המשתמשים…");
+    this.progress(candidate.official ? "Extracting chords from the official version…" : "Extracting chords from the user version…");
     const tab = await this.tab(candidate);
     let content = text(record(tab.view.wiki_tab).content);
     // Authenticated Official pages expose a Chords toggle. Chord names live in
@@ -158,8 +158,8 @@ export class GuitarBrowser {
         if (!await chordView.count()) await tab.page.getByRole("button", { name: "Chords", exact: true }).click();
         await chordView.first().waitFor({ state: "visible", timeout: 20_000 });
         if (new URL(siteUrl(tab.page.url())).pathname !== new URL(tab.candidate.url).pathname)
-          throw new AgentError("source_mismatch", "תצוגת האקורדים עברה לגרסה אחרת. החילוץ נעצר.");
-        if (await chordView.count() !== 1) throw new AgentError("site_changed", "נמצאו כמה תצוגות אקורדים ולא ניתן לזהות את המקור בוודאות.");
+          throw new AgentError("source_mismatch", "The chord view switched to a different version, so extraction stopped.");
+        if (await chordView.count() !== 1) throw new AgentError("site_changed", "Several chord views were found, so the source can't be identified with certainty.");
         // Runs inside the browser on a copy of the chart, marking chord elements for parsing without changing the displayed page.
         content = await chordView.first().evaluate(root => {
           const clone = root.cloneNode(true) as HTMLElement;
@@ -171,14 +171,14 @@ export class GuitarBrowser {
         });
       } catch (error) {
         if (error instanceof AgentError) throw error;
-        throw new AgentError("unsupported_content", "הגרסה הרשמית נפתחה אך תצוגת האקורדים לא נטענה. נסה שוב; לא נבחרה גרסת משתמשים במקומה.");
+        throw new AgentError("unsupported_content", "The official version opened, but its chord view did not load. Try again. No user version was chosen in its place.");
       }
     }
-    if (!content) throw new AgentError("unsupported_content", "הגרסה קיימת, אך לא נמצא בה טקסט אקורדים שניתן לחלץ. ייתכן שהיא מוצגת בנגן תווים בלבד. לא הוחלפה בגרסה לא רשמית.");
+    if (!content) throw new AgentError("unsupported_content", "This version exists, but it has no chord text that can be extracted. It may only be shown in a tab player. It was not replaced with an unofficial version.");
     const parsed = parseChordContent(content);
     const meta = record(tab.view.meta);
     return { source: tab.candidate, selection, retrievedAt: new Date().toISOString(),
-      warning: candidate.official ? null : "זו גרסת משתמשים ולא גרסה רשמית; ייתכנו אי־דיוקים.",
+      warning: candidate.official ? null : "This is a user version, not an official one, so it may contain inaccuracies.",
       capo: count(meta.capo), tuning: text(record(meta.tuning).value) || null,
       key: text(meta.tonality) || text(tab.tab.tonality_name) || null, ...parsed };
   }
