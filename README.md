@@ -111,7 +111,7 @@ server/
 └── api/              accounts backend (port 4319) — Fastify + Drizzle + MySQL
     ├── app.ts          routes, cookie, rate limit; buildApp() takes any AuthStore
     ├── throttle.ts     per-username login lockout
-    ├── proxy.ts        the Vite proxy entry for /api/auth and /api/health
+    ├── proxy.ts        the Vite proxy entry for /api/auth and /api/health; never relays X-Forwarded-*
     ├── auth.ts         argon2id hashing, 30-day sessions, constant-work login
     ├── rules.ts        the one Zod schema for usernames and passwords
     ├── store.ts        AuthStore interface + the in-memory fake the tests use
@@ -148,15 +148,16 @@ HTTPS, and lasts 30 days; the database keeps only a SHA-256 of the cookie token.
 login are rate-limited to 10 attempts per minute per client IP, and a username is locked
 for 15 minutes after 5 failed logins from any IP.
 
-Behind a proxy, set `TRUST_PROXY` (see `.env.example`) — `loopback` for the Vite proxy on
-the same machine, plus a TLS terminator's address if there is one. That is what lets the
-API see the real client IP and know the request was HTTPS. It takes only explicit IPs,
-CIDRs and the names `loopback`, `linklocal` and `uniquelocal`; `true`, hop counts and `/0`
-are refused at startup, because trusting every hop lets a client forge its IP past the
-rate limit. The Vite proxy reads the same setting: from a trusted upstream it keeps
-`X-Forwarded-Proto`/`Host` and extends `X-Forwarded-For`; from anyone else it discards
-them and reports its own connection. A public hostname in front of Vite also needs Vite's
-`server.allowedHosts`.
+`TRUST_PROXY` (see `.env.example`) names the proxy in front of the API, so the API can
+see the real client IP and know whether the request was HTTPS. In development that is the
+Vite proxy on the same machine: set `loopback`. In production it is whatever reverse proxy
+the deployment puts in front of the API. It takes only explicit IPs, CIDRs and the names
+`loopback`, `linklocal` and `uniquelocal`; `true`, hop counts and `/0` are refused at
+startup, because trusting every hop lets a client forge its IP past the rate limit.
+
+The Vite proxy is a development server and trusts nobody: it always discards a caller's
+`X-Forwarded-For`/`-Proto`/`-Host` and reports its own connection instead. It does not read
+`TRUST_PROXY`.
 
 After changing `server/api/schema.ts`, run `npm run api:generate` to write a new migration
 and commit it. `npm test` needs no database; the MySQL store's own test runs only when

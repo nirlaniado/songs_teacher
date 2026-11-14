@@ -52,8 +52,12 @@ describe("auth API", () => {
   });
 
   it("marks the cookie Secure from the original protocol, not the Host header", async () => {
-    const signup = (app: Awaited<ReturnType<typeof setup>>["app"], username: string, headers: Record<string, string>) =>
-      app.inject({ method: "POST", url: "/api/auth/signup", payload: { ...creds, username }, headers }).then((r) => String(r.headers["set-cookie"]));
+    const signup = async (app: Awaited<ReturnType<typeof setup>>["app"], username: string, headers: Record<string, string>) => {
+      const res = await app.inject({ method: "POST", url: "/api/auth/signup", payload: { ...creds, username }, headers });
+      expect(res.statusCode).toBe(201);
+      return String(res.headers["set-cookie"]);
+    };
+    // A genuinely trusted proxy (the reverse proxy in front of the API) reporting HTTPS.
     const { app: trusting } = await setup({ trustProxy: ["loopback"] });
     expect(await signup(trusting, "user1", { "x-forwarded-proto": "https", host: "127.0.0.1:4319" })).toMatch(/Secure/);
     expect(await signup(trusting, "user2", { "x-forwarded-proto": "http", host: "teacher.example.com" })).not.toMatch(/Secure/);
