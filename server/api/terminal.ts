@@ -7,7 +7,6 @@ interface Input extends NodeJS.ReadableStream { isTTY?: boolean; setRawMode?(on:
 export function readSecret(question: string, input: Input = process.stdin, output: NodeJS.WritableStream = process.stdout): Promise<string> {
   const setRawMode = input.setRawMode?.bind(input);
   if (!input.isTTY || !setRawMode) return Promise.reject(new Error("The password must be typed at a terminal."));
-  output.write(question);
   return new Promise((resolve, reject) => {
     let value: string[] = [];
     const finish = (settle: () => void) => {
@@ -26,6 +25,7 @@ export function readSecret(question: string, input: Input = process.stdin, outpu
       }
     };
     setRawMode(true);
+    output.write(question);
     input.resume();
     input.on("data", onData);
   });

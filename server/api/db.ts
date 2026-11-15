@@ -6,6 +6,8 @@ import { UsernameTaken, type AdminAction, type AdminChange, type AuthStore, type
 
 export function connect(url: string) {
   const pool = mysql.createPool({ uri: url, connectionLimit: 5, connectTimeout: 3000 });
+  // Drizzle reads and writes DATETIME as UTC, so the column defaults (CURRENT_TIMESTAMP) must be UTC too, whatever the server's zone.
+  pool.on("connection", (c) => c.query("SET time_zone = '+00:00'"));
   return { pool, db: drizzle(pool, { schema, mode: "default" }) };
 }
 

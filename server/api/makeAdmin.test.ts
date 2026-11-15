@@ -93,9 +93,12 @@ describe("api:make-admin", () => {
 
 describe("readSecret", () => {
   function tty() {
-    const input = Object.assign(new PassThrough(), { isTTY: true, raw: [] as boolean[], setRawMode(on: boolean) { this.raw.push(on); return this; } });
-    const output = new PassThrough();
     let shown = "";
+    const input = Object.assign(new PassThrough(), {
+      isTTY: true, raw: [] as boolean[], shownAtRaw: [] as string[],
+      setRawMode(on: boolean) { this.raw.push(on); this.shownAtRaw.push(shown); return this; },
+    });
+    const output = new PassThrough();
     output.on("data", (d) => (shown += String(d)));
     return { input, output, shown: () => shown };
   }
@@ -107,6 +110,14 @@ describe("readSecret", () => {
     expect(await secret).toBe("hunter222");
     expect(t.shown()).toBe("Password: \n");
     expect(t.input.raw).toEqual([true, false]);
+  });
+
+  it("turns echo off before showing the prompt, so a password typed straight after it is never echoed", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    expect(t.input.shownAtRaw).toEqual([""]);
+    t.input.write("x\r");
+    await secret;
   });
 
   it("is cancelled by Ctrl+C, leaving raw mode", async () => {
