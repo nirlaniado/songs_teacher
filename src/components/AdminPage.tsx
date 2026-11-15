@@ -11,14 +11,54 @@ type Tab = "users" | "audit";
 const when = (iso: string) => new Date(iso).toLocaleString();
 const pages = (total: number, perPage: number) => Math.max(1, Math.ceil(total / perPage));
 
+type Pending = { kind: "reset" | "delete"; user: admin.AccountRow };
+
+/**
+ * Reset and delete run here, above everything the panel can navigate between, and the panel's navigation is locked
+ * while one is in flight: the temporary password a reset returns exists nowhere else, so whatever is mounted when it
+ * arrives has to be what shows it.
+ */
 export function AdminPage({ onBack }: { onBack: () => void }) {
+  const heard = useAuthStore((s) => s.heard);
   const [tab, setTab] = useState<Tab>("users");
   const [refused, setRefused] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [inFlight, setInFlight] = useState(false);
+  const [temporary, setTemporary] = useState<{ username: string; password: string } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [finished, setFinished] = useState(0);
+
+  async function confirm({ kind, user }: Pending) {
+    setInFlight(true);
+    let password: string | null = null;
+    let answer: Answer<unknown>;
+    if (kind === "reset") {
+      const reset = await admin.resetPassword(user.id);
+      if (reset.ok) password = reset.data.temporaryPassword;
+      answer = reset;
+    } else answer = await admin.deleteUser(user.id);
+    setInFlight(false);
+    setPending(null);
+    if (answer.ok) {
+      setActionError(null);
+      if (password !== null) setTemporary({ username: user.username, password });
+    } else {
+      heard(answer);
+      setActionError(answer.error);
+    }
+    setFinished((n) => n + 1);
+  }
+
+  function show(next: Tab) {
+    setPending(null);
+    setTab(next);
+  }
+
   return (
     <div className="h-screen overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-8">
         <div>
-          <Button variant="subtle" size="sm" onClick={onBack}>← Back</Button>
+          <Button variant="subtle" size="sm" disabled={inFlight} onClick={onBack}>← Back</Button>
           <h1 className="mt-4 text-2xl font-semibold text-fg">Admin</h1>
         </div>
         {refused ? (
@@ -26,13 +66,29 @@ export function AdminPage({ onBack }: { onBack: () => void }) {
         ) : (
           <>
             <div className="flex gap-2" role="group" aria-label="Admin views">
-              <Button size="sm" pressed={tab === "users"} onClick={() => setTab("users")}>Users</Button>
-              <Button size="sm" pressed={tab === "audit"} onClick={() => setTab("audit")}>Audit log</Button>
+              <Button size="sm" disabled={inFlight} pressed={tab === "users"} onClick={() => show("users")}>Users</Button>
+              <Button size="sm" disabled={inFlight} pressed={tab === "audit"} onClick={() => show("audit")}>Audit log</Button>
             </div>
-            {tab === "users" ? <Users onRefused={setRefused} /> : <Audit onRefused={setRefused} />}
+            {actionError && <p role="alert" className="text-sm text-danger">{actionError}</p>}
+            {pending && (
+              <Confirm
+                label={pending.kind === "reset" ? `Reset ${pending.user.username}'s password` : `Delete ${pending.user.username}`}
+                busy={inFlight}
+                onCancel={() => setPending(null)}
+                onConfirm={() => void confirm(pending)}
+              >
+                {pending.kind === "reset"
+                  ? <>Reset the password of <strong>{pending.user.username}</strong>? Their sessions end, and they must choose a new password when they sign in with the temporary one.</>
+                  : <>Delete <strong>{pending.user.username}</strong> permanently? Their account and sessions are removed. This can't be undone.</>}
+              </Confirm>
+            )}
+            {tab === "users"
+              ? <Users onRefused={setRefused} onAsk={setPending} locked={inFlight} reloadKey={finished} />
+              : <Audit onRefused={setRefused} />}
           </>
         )}
       </div>
+      {temporary && <TemporaryPassword {...temporary} onClose={() => setTemporary(null)} />}
     </div>
   );
 }
@@ -65,27 +121,31 @@ function useListing<T>(load: () => Promise<Answer<T>>, onRefused: (why: string) 
   return { data, error, reload };
 }
 
-function Users({ onRefused }: { onRefused: (why: string) => void }) {
+function Users({ onRefused, onAsk, locked, reloadKey }: {
+  onRefused: (why: string) => void;
+  /** Asks the page to confirm a reset or delete, which it then runs. */
+  onAsk: (pending: Pending) => void;
+  /** A reset or delete is in flight: nothing here may navigate or act. */
+  locked: boolean;
+  /** Changes when the page has finished one, so the list shows its result. */
+  reloadKey: number;
+}) {
   const heard = useAuthStore((s) => s.heard);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const load = useCallback(() => admin.listUsers(query, page), [query, page]);
+  const load = useCallback(() => admin.listUsers(query, page), [query, page, reloadKey]);
   const { data, error, reload } = useListing(load, onRefused);
-  const [pending, setPending] = useState<{ kind: "reset" | "delete"; user: admin.AccountRow } | null>(null);
-  const [temporary, setTemporary] = useState<{ username: string; password: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const busy = toggling || locked;
 
-  async function act<T>(run: () => Promise<Answer<T>>, then?: (data: T) => void) {
-    setBusy(true);
-    const answer = await run();
-    setBusy(false);
-    setPending(null);
-    if (answer.ok) {
-      setActionError(null);
-      then?.(answer.data);
-    } else {
+  async function setDisabled(user: admin.AccountRow) {
+    setToggling(true);
+    const answer = await admin.setDisabled(user.id, !user.disabled);
+    setToggling(false);
+    if (answer.ok) setActionError(null);
+    else {
       heard(answer as Refusal);
       setActionError(answer.error);
     }
@@ -102,25 +162,11 @@ function Users({ onRefused }: { onRefused: (why: string) => void }) {
   return (
     <section aria-label="Users" className="flex flex-col gap-4">
       <form className="flex gap-2" role="search" onSubmit={onSearch}>
-        <Field type="search" aria-label="Search by username" placeholder="Search by username" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Button type="submit">Search</Button>
+        <Field type="search" aria-label="Search by username" placeholder="Search by username" disabled={locked} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Button type="submit" disabled={locked}>Search</Button>
       </form>
       {error && <Problem error={error} onRetry={() => void reload()} />}
       {actionError && <p role="alert" className="text-sm text-danger">{actionError}</p>}
-      {pending && (
-        <Confirm
-          label={pending.kind === "reset" ? `Reset ${pending.user.username}'s password` : `Delete ${pending.user.username}`}
-          busy={busy}
-          onCancel={() => setPending(null)}
-          onConfirm={() => void (pending.kind === "reset"
-            ? act(() => admin.resetPassword(pending.user.id), (d) => setTemporary({ username: pending.user.username, password: d.temporaryPassword }))
-            : act(() => admin.deleteUser(pending.user.id)))}
-        >
-          {pending.kind === "reset"
-            ? <>Reset the password of <strong>{pending.user.username}</strong>? Their sessions end, and they must choose a new password when they sign in with the temporary one.</>
-            : <>Delete <strong>{pending.user.username}</strong> permanently? Their account and sessions are removed. This can't be undone.</>}
-        </Confirm>
-      )}
       {data && (
         <>
           <table className="w-full text-left text-sm">
@@ -146,15 +192,15 @@ function Users({ onRefused }: { onRefused: (why: string) => void }) {
                     ) : (
                       <div className="flex justify-end gap-1">
                         <Button size="sm" variant="subtle" disabled={busy} aria-label={`${user.disabled ? "Enable" : "Disable"} ${user.username}`}
-                          onClick={() => void act(() => admin.setDisabled(user.id, !user.disabled))}>
+                          onClick={() => void setDisabled(user)}>
                           {user.disabled ? "Enable" : "Disable"}
                         </Button>
                         <Button size="sm" variant="subtle" disabled={busy} aria-label={`Reset ${user.username}'s password…`}
-                          onClick={() => setPending({ kind: "reset", user })}>
+                          onClick={() => onAsk({ kind: "reset", user })}>
                           Reset password…
                         </Button>
                         <Button size="sm" variant="destructive-subtle" disabled={busy} aria-label={`Delete ${user.username}…`}
-                          onClick={() => setPending({ kind: "delete", user })}>
+                          onClick={() => onAsk({ kind: "delete", user })}>
                           Delete…
                         </Button>
                       </div>
@@ -165,10 +211,9 @@ function Users({ onRefused }: { onRefused: (why: string) => void }) {
             </tbody>
           </table>
           {data.users.length === 0 && <p className="text-sm text-faint">{query ? `No username contains "${query}".` : "No users."}</p>}
-          <Pager page={page} pages={total} count={`${data.total} ${data.total === 1 ? "user" : "users"}`} onPage={setPage} />
+          <Pager page={page} pages={total} count={`${data.total} ${data.total === 1 ? "user" : "users"}`} onPage={setPage} locked={locked} />
         </>
       )}
-      {temporary && <TemporaryPassword {...temporary} onClose={() => setTemporary(null)} />}
     </section>
   );
 }
@@ -205,12 +250,14 @@ function Audit({ onRefused }: { onRefused: (why: string) => void }) {
   );
 }
 
-function Pager({ page, pages, count, onPage }: { page: number; pages: number; count: string; onPage: (page: number) => void }) {
+function Pager({ page, pages, count, onPage, locked = false }: {
+  page: number; pages: number; count: string; onPage: (page: number) => void; locked?: boolean;
+}) {
   return (
     <nav aria-label="Pages" className="flex items-center gap-3 text-xs text-muted">
-      <Button size="sm" variant="subtle" disabled={page <= 1} onClick={() => onPage(page - 1)}>Previous</Button>
+      <Button size="sm" variant="subtle" disabled={locked || page <= 1} onClick={() => onPage(page - 1)}>Previous</Button>
       <span>Page {page} of {pages} · {count}</span>
-      <Button size="sm" variant="subtle" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next</Button>
+      <Button size="sm" variant="subtle" disabled={locked || page >= pages} onClick={() => onPage(page + 1)}>Next</Button>
     </nav>
   );
 }

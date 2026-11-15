@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App.js";
 import { Slide } from "../schema/deck.js";
@@ -234,6 +234,42 @@ describe("resetting a password", () => {
     expect(JSON.stringify({ ...sessionStorage })).not.toContain("Temp-1-xYz");
 
     fireEvent.click(dialog.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.body.innerHTML).not.toContain("Temp-1-xYz");
+  });
+
+  it("holds the panel while a reset is in flight, then shows its password exactly once", async () => {
+    await adminPage();
+    const reply = routes["POST /api/admin/users/2/reset-password"]!;
+    let release: (() => void) | null = null;
+    routes["POST /api/admin/users/2/reset-password"] = async (body, url) => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return reply(body, url);
+    };
+    fireEvent.click(rowOf("alice").getByRole("button", { name: "Reset alice's password…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset alice's password" }));
+    await waitFor(() => expect(release).not.toBeNull());
+
+    for (const name of ["← Back", "Users", "Audit log", "Search"]) {
+      const control = screen.getByRole("button", { name }) as HTMLButtonElement;
+      expect([name, control.disabled]).toEqual([name, true]);
+      fireEvent.click(control);
+    }
+    expect((screen.getByRole("searchbox", { name: "Search by username" }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByRole("heading", { name: "Admin" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Users" })).toBeTruthy();
+
+    act(() => release!());
+    const dialog = await screen.findByRole("dialog", { name: "Temporary password for alice" });
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect((within(dialog).getByRole("textbox", { name: "Temporary password" }) as HTMLInputElement).value).toBe("Temp-1-xYz");
+    expect(sent("POST", "/api/admin/users/2/reset-password")).toHaveLength(1);
+    await waitFor(() => expect((screen.getByRole("button", { name: "← Back" }) as HTMLButtonElement).disabled).toBe(false));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Audit log" }));
+    fireEvent.click(screen.getByRole("button", { name: "Users" }));
+    await screen.findByRole("cell", { name: "alice" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.body.innerHTML).not.toContain("Temp-1-xYz");
   });
