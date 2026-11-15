@@ -231,7 +231,7 @@ describe("the admin username at public sign-up", () => {
     const { signup, call, store } = await setup({ adminUsername: "owner" });
     await signup();
     const calls: string[] = [];
-    for (const name of ["createUser", "findUser", "findUserById", "createSession", "findSession", "deleteSession", "setPassword", "deleteSessions", "deleteUser"] as const) {
+    for (const name of ["createUser", "findUser", "findUserById", "createSession", "findSession", "deleteSession", "startSignIn", "changeOwnPassword", "deleteOwnAccount", "endOwnSessions", "setPassword"] as const) {
       const real = store[name].bind(store) as (...a: unknown[]) => Promise<unknown>;
       (store as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => (calls.push(name), real(...args));
     }

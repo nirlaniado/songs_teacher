@@ -44,7 +44,7 @@ export async function makeAdmin(options: { store: AuthStore; hasher: Hasher; adm
   }
   const passwordHash = await hasher.hash(password);
   if (existing) {
-    await store.setPassword(existing.id, passwordHash, null);
+    await store.setPassword(existing.id, passwordHash);
     prompts.say(`New password set for "${existing.username}". Every session of that account has been signed out.`);
     return 0;
   }

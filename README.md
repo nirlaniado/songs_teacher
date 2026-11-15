@@ -163,7 +163,10 @@ account. None of them can be aimed at the admin account itself (403).
 | `GET /api/admin/audit?page=&perPage=` | every admin action, newest first: time, action, target user id and username |
 
 Each admin action and its `admin_audit` row are written in one transaction; the row keeps the
-target's id and username after the user is deleted. The temporary password comes from
+target's id and username after the user is deleted. Work authorized before an admin action can't
+land after it: starting a session at login, changing or deleting one's own account, and signing
+out everywhere each lock the user row and check that the verified password hash and the asking
+session are still current, writing nothing if not. The temporary password comes from
 `crypto.randomBytes`, is stored only as a hash, and is never logged or audited. A
 must-change-password account can sign in, but every route except `GET /api/auth/me`,
 `POST /api/auth/password`, logout and logout-all answers 403 `must_change_password` until it

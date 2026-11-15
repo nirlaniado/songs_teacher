@@ -1,8 +1,8 @@
-import { asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema.js";
-import { UsernameTaken, type AdminAction, type AdminChange, type AuthStore } from "./store.js";
+import { UsernameTaken, type AdminAction, type AdminChange, type AuthStore, type NewSession, type Proof, type SignIn } from "./store.js";
 
 export function connect(url: string) {
   const pool = mysql.createPool({ uri: url, connectionLimit: 5, connectTimeout: 3000 });
@@ -15,6 +15,23 @@ const record = (row: typeof users.$inferSelect) => ({
 });
 /** `search` as a LIKE pattern (with `ESCAPE '!'`) matching it literally anywhere in the name. */
 const containing = (search: string) => `%${search.toLowerCase().replace(/[!%_]/g, (c) => `!${c}`)}%`;
+
+type Tx = Parameters<Parameters<ReturnType<typeof connect>["db"]["transaction"]>[0]>[0];
+
+/** The user row, locked until the transaction ends. Every transaction that changes a user takes this lock first. */
+async function lockUser(tx: Tx, userId: number) {
+  const [row] = await tx.select().from(users).where(eq(users.id, userId)).for("update");
+  return row ?? null;
+}
+
+/** The user, locked, if the asking session still exists and the verified hash is still current; otherwise null. */
+async function proven(tx: Tx, userId: number, proof: Proof) {
+  const user = await lockUser(tx, userId);
+  if (!user || user.disabled || user.passwordHash !== proof.passwordHash) return null;
+  const [live] = await tx.select({ id: sessions.id }).from(sessions)
+    .where(and(eq(sessions.id, proof.sessionId), eq(sessions.userId, userId))).for("update");
+  return live ? user : null;
+}
 
 export class MySqlStore implements AuthStore {
   constructor(private conn: ReturnType<typeof connect>) {}
@@ -37,23 +54,49 @@ export class MySqlStore implements AuthStore {
     const [row] = await this.conn.db.select().from(users).where(eq(users.id, id)).limit(1);
     return row ? record(row) : null;
   }
-  async setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date } | null) {
-    await this.conn.db.transaction(async (tx) => {
-      await tx.update(users).set({ passwordHash, mustChangePassword: false }).where(eq(users.id, userId));
-      await tx.delete(sessions).where(eq(sessions.userId, userId));
-      if (session) await tx.insert(sessions).values({ id: session.id, userId, expiresAt: session.expiresAt });
+  async startSignIn(userId: number, verifiedHash: string, session: NewSession, at: Date): Promise<SignIn> {
+    return this.conn.db.transaction(async (tx) => {
+      const user = await lockUser(tx, userId);
+      if (!user) return { ok: false, reason: "gone" } as const;
+      if (user.passwordHash !== verifiedHash) return { ok: false, reason: "changed" } as const;
+      if (user.disabled) return { ok: false, reason: "disabled" } as const;
+      await tx.insert(sessions).values({ id: session.id, userId, expiresAt: session.expiresAt });
+      await tx.update(users).set({ lastSignInAt: at }).where(eq(users.id, userId));
+      return { ok: true, mustChangePassword: user.mustChangePassword } as const;
     });
   }
-  async recordSignIn(userId: number, at: Date) {
-    await this.conn.db.update(users).set({ lastSignInAt: at }).where(eq(users.id, userId));
+  async changeOwnPassword(userId: number, proof: Proof, passwordHash: string, session: NewSession) {
+    return this.conn.db.transaction(async (tx) => {
+      if (!(await proven(tx, userId, proof))) return false;
+      await tx.update(users).set({ passwordHash, mustChangePassword: false }).where(eq(users.id, userId));
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
+      await tx.insert(sessions).values({ id: session.id, userId, expiresAt: session.expiresAt });
+      return true;
+    });
   }
-  async deleteSessions(userId: number) {
-    await this.conn.db.delete(sessions).where(eq(sessions.userId, userId));
-  }
-  async deleteUser(userId: number) {
-    await this.conn.db.transaction(async (tx) => {
+  async deleteOwnAccount(userId: number, proof: Proof) {
+    return this.conn.db.transaction(async (tx) => {
+      if (!(await proven(tx, userId, proof))) return false;
       await tx.delete(sessions).where(eq(sessions.userId, userId));
       await tx.delete(users).where(eq(users.id, userId));
+      return true;
+    });
+  }
+  async endOwnSessions(userId: number, sessionId: string) {
+    return this.conn.db.transaction(async (tx) => {
+      if (!(await lockUser(tx, userId))) return false;
+      const [live] = await tx.select({ id: sessions.id }).from(sessions)
+        .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId))).for("update");
+      if (!live) return false;
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
+      return true;
+    });
+  }
+  async setPassword(userId: number, passwordHash: string) {
+    await this.conn.db.transaction(async (tx) => {
+      await lockUser(tx, userId);
+      await tx.update(users).set({ passwordHash, mustChangePassword: false }).where(eq(users.id, userId));
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
     });
   }
   async createSession(id: string, userId: number, expiresAt: Date) {
@@ -87,10 +130,11 @@ export class MySqlStore implements AuthStore {
   }
   async adminChange(userId: number, change: AdminChange, at: Date) {
     return this.conn.db.transaction(async (tx) => {
-      // Locks the row, so the action and its audit row see the same user and nothing changes it in between.
-      const [target] = await tx.select({ id: users.id, username: users.username }).from(users)
-        .where(eq(users.id, userId)).for("update");
-      if (!target) return null;
+      // Locks the row first, like every user write, so the action and its audit row see the same user and work
+      // authorized before it either commits first or finds its proof gone.
+      const locked = await lockUser(tx, userId);
+      if (!locked) return null;
+      const target = { id: locked.id, username: locked.username };
       if (change.action === "disable") await tx.update(users).set({ disabled: true }).where(eq(users.id, userId));
       if (change.action === "enable") await tx.update(users).set({ disabled: false }).where(eq(users.id, userId));
       if (change.action === "reset-password")

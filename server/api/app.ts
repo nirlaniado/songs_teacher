@@ -50,22 +50,24 @@ export async function buildApp(options: AppOptions) {
   });
 
   /**
-   * Checks a signed-in user's own password, under the same per-account lockout as login. Sends the refusal and
-   * returns true if refused. A boolean, not the reply: a reply is thenable, so an async function can't return it.
+   * Checks a signed-in user's own password, under the same per-account lockout as login. Returns the hash it was
+   * verified against, which the write that follows must still find; or sends the refusal and returns null. Not the
+   * reply: a reply is thenable, so an async function can't return it.
    */
-  async function refusePassword(user: User, password: string, reply: FastifyReply): Promise<boolean> {
+  async function verifiedHash(user: User, password: string, reply: FastifyReply): Promise<string | null> {
     const wait = throttle.lockedFor(user.username);
     if (wait) {
       reply.code(429).header("Retry-After", Math.ceil(wait / 1000)).send({ error: "Too many failed attempts for this account. Try again later." });
-      return true;
+      return null;
     }
-    if (await auth!.checkPassword(user.id, password)) {
+    const hash = await auth!.checkPassword(user.id, password);
+    if (hash) {
       throttle.succeed(user.username);
-      return false;
+      return hash;
     }
     throttle.fail(user.username);
     reply.code(403).send({ error: "Wrong password." });
-    return true;
+    return null;
   }
   const badInput = (reply: FastifyReply, issues: { message: string }[]) => reply.code(400).send({ error: issues[0]?.message ?? "Invalid input." });
   const notSignedIn = (reply: FastifyReply) => reply.code(401).send({ error: "Not signed in." });
@@ -164,8 +166,11 @@ export async function buildApp(options: AppOptions) {
       if (!session) return notSignedIn(reply);
       const input = PasswordChange.safeParse(req.body);
       if (!input.success) return badInput(reply, input.error.issues);
-      if (await refusePassword(session.user, input.data.currentPassword, reply)) return reply;
-      const fresh = await auth!.changePassword(session.user, input.data.newPassword);
+      const verified = await verifiedHash(session.user, input.data.currentPassword, reply);
+      if (!verified) return reply;
+      const fresh = await auth!.changePassword(session, verified, input.data.newPassword);
+      // An admin disable, reset or delete landed after the check: this session is over and nothing was changed.
+      if (!fresh) return notSignedIn(reply);
       setSession(req, reply, fresh.token, fresh.expiresAt);
       return { ok: true };
     });
@@ -173,7 +178,7 @@ export async function buildApp(options: AppOptions) {
     routes.post("/api/auth/logout-all", async (req, reply) => {
       const session = req.session;
       if (!session) return notSignedIn(reply);
-      await auth!.endAllSessions(session.user.id);
+      if (!(await auth!.endAllSessions(session))) return notSignedIn(reply);
       reply.clearCookie(COOKIE, cookieOptions(req));
       return { ok: true };
     });
@@ -184,8 +189,9 @@ export async function buildApp(options: AppOptions) {
       const input = AccountDeletion.safeParse(req.body);
       if (!input.success) return badInput(reply, input.error.issues);
       if (isAdmin(session.user)) return reply.code(403).send({ error: "The admin account can't be deleted." });
-      if (await refusePassword(session.user, input.data.password, reply)) return reply;
-      await auth!.deleteUser(session.user.id);
+      const verified = await verifiedHash(session.user, input.data.password, reply);
+      if (!verified) return reply;
+      if (!(await auth!.deleteOwnAccount(session, verified))) return notSignedIn(reply);
       reply.clearCookie(COOKIE, cookieOptions(req));
       return { ok: true };
     });

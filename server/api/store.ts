@@ -11,6 +11,10 @@ export type AdminChange =
 export type AdminAction = AdminChange["action"];
 export interface AuditRow { id: number; at: Date; action: AdminAction; targetUserId: number; targetUsername: string }
 export interface Page<T> { items: T[]; total: number }
+/** What authorized a self-service write: the session that asked and the password hash that was just verified. */
+export interface Proof { sessionId: string; passwordHash: string }
+export interface NewSession { id: string; expiresAt: Date }
+export type SignIn = { ok: true; mustChangePassword: boolean } | { ok: false; reason: "gone" | "changed" | "disabled" };
 
 export class UsernameTaken extends Error {}
 
@@ -19,15 +23,26 @@ export interface AuthStore {
   createUser(username: string, passwordHash: string): Promise<User>;
   findUser(username: string): Promise<UserRecord | null>;
   findUserById(id: number): Promise<UserRecord | null>;
+  // The conditional writes below each lock the user row and check, under that lock, that what authorized them is
+  // still current. An admin action takes the same lock, so whichever commits second sees the other's result: work
+  // authorized before a disable, reset or delete can't land after it.
+
   /**
-   * Replaces the password hash, clears must-change-password and ends every session of that user, then starts
-   * `session` for them if given, all together.
+   * Starts a session and records the sign-in, only if the user still exists, still has the password hash that was
+   * verified, and isn't disabled. The flags returned come from that same locked read.
    */
-  setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date } | null): Promise<void>;
-  recordSignIn(userId: number, at: Date): Promise<void>;
-  deleteSessions(userId: number): Promise<void>;
-  /** Deletes the user and every session of theirs. */
-  deleteUser(userId: number): Promise<void>;
+  startSignIn(userId: number, verifiedHash: string, session: NewSession, at: Date): Promise<SignIn>;
+  /**
+   * Only if the asking session still exists and the verified hash is still current: replaces the hash, clears
+   * must-change-password, ends every session of the user and starts `session`. False, and nothing written, otherwise.
+   */
+  changeOwnPassword(userId: number, proof: Proof, passwordHash: string, session: NewSession): Promise<boolean>;
+  /** Deletes the user and their sessions, on the same condition as changeOwnPassword. */
+  deleteOwnAccount(userId: number, proof: Proof): Promise<boolean>;
+  /** Ends every session of the user, only if the asking session still exists. */
+  endOwnSessions(userId: number, sessionId: string): Promise<boolean>;
+  /** The console's reset (api:make-admin): replaces the hash, clears must-change-password, ends every session. */
+  setPassword(userId: number, passwordHash: string): Promise<void>;
   createSession(id: string, userId: number, expiresAt: Date): Promise<void>;
   findSession(id: string): Promise<SessionRecord | null>;
   deleteSession(id: string): Promise<void>;
@@ -66,25 +81,44 @@ export class MemoryStore implements AuthStore {
     this.check();
     return record(this.users.find((u) => u.id === id));
   }
-  async setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date } | null) {
+  // Each conditional write runs without an await between its check and its write, which is what the MySQL
+  // store's row lock gives it there.
+  async startSignIn(userId: number, verifiedHash: string, session: NewSession, at: Date): Promise<SignIn> {
+    this.check();
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) return { ok: false, reason: "gone" };
+    if (user.passwordHash !== verifiedHash) return { ok: false, reason: "changed" };
+    if (user.disabled) return { ok: false, reason: "disabled" };
+    this.sessions.set(session.id, { userId, expiresAt: session.expiresAt });
+    user.lastSignInAt = at;
+    return { ok: true, mustChangePassword: user.mustChangePassword };
+  }
+  async changeOwnPassword(userId: number, proof: Proof, passwordHash: string, session: NewSession) {
+    this.check();
+    const user = this.proven(userId, proof);
+    if (!user) return false;
+    Object.assign(user, { passwordHash, mustChangePassword: false });
+    this.endSessions(userId);
+    this.sessions.set(session.id, { userId, expiresAt: session.expiresAt });
+    return true;
+  }
+  async deleteOwnAccount(userId: number, proof: Proof) {
+    this.check();
+    if (!this.proven(userId, proof)) return false;
+    this.users = this.users.filter((u) => u.id !== userId);
+    this.endSessions(userId);
+    return true;
+  }
+  async endOwnSessions(userId: number, sessionId: string) {
+    this.check();
+    if (this.sessions.get(sessionId)?.userId !== userId) return false;
+    this.endSessions(userId);
+    return true;
+  }
+  async setPassword(userId: number, passwordHash: string) {
     this.check();
     const user = this.users.find((u) => u.id === userId);
     if (user) Object.assign(user, { passwordHash, mustChangePassword: false });
-    this.endSessions(userId);
-    if (session) this.sessions.set(session.id, { userId, expiresAt: session.expiresAt });
-  }
-  async recordSignIn(userId: number, at: Date) {
-    this.check();
-    const user = this.users.find((u) => u.id === userId);
-    if (user) user.lastSignInAt = at;
-  }
-  async deleteSessions(userId: number) {
-    this.check();
-    this.endSessions(userId);
-  }
-  async deleteUser(userId: number) {
-    this.check();
-    this.users = this.users.filter((u) => u.id !== userId);
     this.endSessions(userId);
   }
   async createSession(id: string, userId: number, expiresAt: Date) {
@@ -127,6 +161,11 @@ export class MemoryStore implements AuthStore {
   }
   async ping() { this.check(); }
   sessionCount() { return this.sessions.size; }
+  private proven(userId: number, proof: Proof) {
+    const user = this.users.find((u) => u.id === userId);
+    const live = this.sessions.get(proof.sessionId)?.userId === userId;
+    return user && live && !user.disabled && user.passwordHash === proof.passwordHash ? user : null;
+  }
   private endSessions(userId: number) {
     for (const [id, s] of this.sessions) if (s.userId === userId) this.sessions.delete(id);
   }
