@@ -1,14 +1,22 @@
 import { z } from "zod";
 
 // The accounts API over HTTP. Hard rule 10: nothing here imports from server/; the shapes are restated.
-const UserReply = z.object({ user: z.object({ id: z.number(), username: z.string(), admin: z.boolean().optional() }) });
+const UserReply = z.object({
+  user: z.object({ id: z.number(), username: z.string(), admin: z.boolean().optional(), mustChangePassword: z.boolean().optional() }),
+});
 export type User = z.infer<typeof UserReply>["user"];
 
 export type Mode = "login" | "signup";
 export type Session = { kind: "signedIn"; user: User } | { kind: "signedOut" } | { kind: "unreachable" };
 export type Outcome = { ok: true; user: User } | { ok: false; error: string };
-/** `signedOut`: the server no longer knows this session, e.g. it was ended from another device. */
-export type Done = { ok: true } | { ok: false; error: string; signedOut: boolean };
+/**
+ * Why a request was refused, beyond its message. `signedOut`: the server no longer knows this session, e.g. it was
+ * ended from another device. `mustChange`: an admin reset the password, and nothing but changing it is allowed.
+ * `forbidden`: any other 403.
+ */
+export interface Refusal { error: string; signedOut: boolean; mustChange: boolean; forbidden: boolean }
+export type Done = { ok: true } | ({ ok: false } & Refusal);
+export type Answer<T> = { ok: true; data: T } | ({ ok: false } & Refusal);
 
 export const UNREACHABLE = "Can't reach the server. Check your connection and try again.";
 
@@ -54,17 +62,38 @@ export async function submit(mode: Mode, username: string, password: string): Pr
 }
 
 async function failure(res: Response | null): Promise<string> {
-  if (!res || res.status >= 500) return UNREACHABLE;
-  if (res.status === 429) return `Too many attempts. Try again ${waitFor(res.headers.get("retry-after"))}.`;
-  const body = await json(res);
-  const error = body && typeof body === "object" && "error" in body && typeof body.error === "string" ? body.error : null;
-  return error ?? `The server refused that (${res.status}).`;
+  return (await refusal(res)).error;
+}
+
+const ErrorReply = z.object({ error: z.string(), code: z.string().optional() });
+
+async function refusal(res: Response | null): Promise<Refusal> {
+  const plain = { signedOut: false, mustChange: false, forbidden: false };
+  if (!res || res.status >= 500) return { error: UNREACHABLE, ...plain };
+  if (res.status === 429) return { error: `Too many attempts. Try again ${waitFor(res.headers.get("retry-after"))}.`, ...plain };
+  const body = ErrorReply.safeParse(await json(res));
+  const mustChange = res.status === 403 && body.success && body.data.code === "must_change_password";
+  return {
+    error: body.success ? body.data.error : `The server refused that (${res.status}).`,
+    signedOut: res.status === 401,
+    mustChange,
+    forbidden: res.status === 403 && !mustChange,
+  };
+}
+
+/** One call to the API whose answer, on success, must match `shape`. */
+export async function request<T>(method: "GET" | "POST" | "DELETE", path: string, shape: z.ZodType<T>, body?: object): Promise<Answer<T>> {
+  const res = await call(path, body ? { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : { method });
+  if (!res?.ok) return { ok: false, ...(await refusal(res)) };
+  const data = shape.safeParse(await json(res));
+  return data.success
+    ? { ok: true, data: data.data }
+    : { ok: false, error: "The server sent an answer this app doesn't understand.", signedOut: false, mustChange: false, forbidden: false };
 }
 
 async function act(method: "POST" | "DELETE", path: string, body?: object): Promise<Done> {
-  const res = await call(path, body ? { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : { method });
-  if (res?.ok) return { ok: true };
-  return { ok: false, error: await failure(res), signedOut: res?.status === 401 };
+  const answer = await request(method, path, z.unknown(), body);
+  return answer.ok ? { ok: true } : answer;
 }
 
 export const changePassword = (currentPassword: string, newPassword: string) =>

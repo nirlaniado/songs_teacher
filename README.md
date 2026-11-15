@@ -151,7 +151,12 @@ not start it; run `npm run api:server` alongside them.
 | `GET /api/health` | 200 `{database: "reachable"}`, 503 `"unreachable"` or `"not configured"` |
 
 The admin's endpoints answer 401 when signed out and 403 to everyone but the `ADMIN_USERNAME`
-account. None of them can be aimed at the admin account itself (403).
+account. None of them can be aimed at the admin account itself (403). In the app they are the
+**Admin** page, offered beside **Account** in the signed-in badge to the admin only: the user
+table with disable/enable, reset and delete (reset and delete each confirmed in the page, naming
+the user), and the audit log. A reset's temporary password is shown once, in a dialog with a
+copy button, and kept nowhere but that dialog. An account signing in with it sees only the
+"Choose a new password" screen until it does.
 
 | Endpoint | Does |
 |---|---|

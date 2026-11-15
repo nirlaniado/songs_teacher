@@ -93,9 +93,12 @@ describe("api:make-admin", () => {
 
 describe("readSecret", () => {
   function tty() {
-    const input = Object.assign(new PassThrough(), { isTTY: true, raw: [] as boolean[], setRawMode(on: boolean) { this.raw.push(on); return this; } });
-    const output = new PassThrough();
     let shown = "";
+    const input = Object.assign(new PassThrough(), {
+      isTTY: true, raw: [] as boolean[], shownAtRaw: [] as string[],
+      setRawMode(on: boolean) { this.raw.push(on); this.shownAtRaw.push(shown); return this; },
+    });
+    const output = new PassThrough();
     output.on("data", (d) => (shown += String(d)));
     return { input, output, shown: () => shown };
   }
@@ -109,11 +112,42 @@ describe("readSecret", () => {
     expect(t.input.raw).toEqual([true, false]);
   });
 
+  it("turns echo off before showing the prompt, so a password typed straight after it is never echoed", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    expect(t.input.shownAtRaw).toEqual([""]);
+    t.input.write("x\r");
+    await secret;
+  });
+
   it("is cancelled by Ctrl+C, leaving raw mode", async () => {
     const t = tty();
     const secret = readSecret("Password: ", t.input, t.output);
     t.input.write("abc\u0003");
     await expect(secret).rejects.toThrow("Cancelled.");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
+  it("leaves raw mode and rejects when writing the prompt throws", async () => {
+    const t = tty();
+    const broken = Object.assign(new PassThrough(), { write() { throw new Error("EIO"); } });
+    await expect(readSecret("Password: ", t.input, broken)).rejects.toThrow("EIO");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
+  it("leaves raw mode and rejects when the input errors", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    t.input.emit("error", new Error("EIO"));
+    await expect(secret).rejects.toThrow("EIO");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
+  it("leaves raw mode and rejects when the input ends before Enter", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    t.input.end("abc");
+    await expect(secret).rejects.toThrow("The input closed before the password was entered.");
     expect(t.input.raw).toEqual([true, false]);
   });
 

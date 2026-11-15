@@ -83,6 +83,13 @@ describe.skipIf(!url)("MySqlStore admin", () => {
     expect(items).toEqual([{ ...user, createdAt: expect.any(Date), disabled: false, mustChangePassword: false, lastSignInAt: at }]);
   });
 
+  it("stamps createdAt in UTC, whatever the server's time zone", async () => {
+    const user = await store.createUser(`${prefix}_clock`, "hash");
+    const { items } = await store.listUsers({ search: `${prefix}_clock`, limit: 10, offset: 0 });
+    expect(Math.abs(items[0]!.createdAt.getTime() - Date.now())).toBeLessThan(5_000);
+    expect(items[0]!.id).toBe(user.id);
+  });
+
   it("lists by id, pages, and searches ignoring case with % and _ taken literally", async () => {
     for (const name of ["b_x", "bax", "B%y"]) await store.createUser(`${prefix}${name}`, "hash");
     const names = async (search: string, limit = 10, offset = 0) => {
