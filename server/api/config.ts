@@ -10,6 +10,11 @@ export function databaseUrl(): string | undefined {
   return process.env.DATABASE_URL || undefined;
 }
 
+/** The one admin account's username (ADMIN_USERNAME), if set. */
+export function adminUsername(): string | undefined {
+  return process.env.ADMIN_USERNAME?.trim() || undefined;
+}
+
 /** The proxies allowed to set X-Forwarded-*: an explicit list, empty meaning none. */
 export type TrustProxy = string[];
 

@@ -26,6 +26,26 @@ export class MySqlStore implements AuthStore {
       .where(sql`lower(${schema.users.username}) = ${username.toLowerCase()}`).limit(1);
     return row ? { id: row.id, username: row.username, passwordHash: row.passwordHash } : null;
   }
+  async findUserById(id: number) {
+    const [row] = await this.conn.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
+    return row ? { id: row.id, username: row.username, passwordHash: row.passwordHash } : null;
+  }
+  async setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date }) {
+    await this.conn.db.transaction(async (tx) => {
+      await tx.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
+      await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+      await tx.insert(schema.sessions).values({ id: session.id, userId, expiresAt: session.expiresAt });
+    });
+  }
+  async deleteSessions(userId: number) {
+    await this.conn.db.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+  }
+  async deleteUser(userId: number) {
+    await this.conn.db.transaction(async (tx) => {
+      await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+      await tx.delete(schema.users).where(eq(schema.users.id, userId));
+    });
+  }
   async createSession(id: string, userId: number, expiresAt: Date) {
     await this.conn.db.insert(schema.sessions).values({ id, userId, expiresAt });
   }

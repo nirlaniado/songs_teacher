@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { hash, verify } from "@node-rs/argon2";
-import type { AuthStore, User } from "./store.js";
+import { UsernameTaken, type AuthStore, type User } from "./store.js";
 
 export const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -21,8 +21,15 @@ export class Auth {
     this.dummyHash ??= await this.hasher.hash(randomBytes(16).toString("hex"));
   }
 
-  async signup(username: string, password: string) {
-    const user = await this.store.createUser(username, await this.hasher.hash(password));
+  /**
+   * A `reserved` name is refused as taken after the same work, one hash and one lookup, so neither answer nor timing
+   * tells it apart. createUser still refuses a duplicate that lands between the lookup and the insert.
+   */
+  async signup(username: string, password: string, reserved = false) {
+    const passwordHash = await this.hasher.hash(password);
+    const existing = await this.store.findUser(username);
+    if (reserved || existing) throw new UsernameTaken();
+    const user = await this.store.createUser(username, passwordHash);
     return { user, ...(await this.startSession(user)) };
   }
 
@@ -37,6 +44,10 @@ export class Auth {
   }
 
   async userFor(token: string | undefined): Promise<User | null> {
+    return (await this.sessionFor(token))?.user ?? null;
+  }
+
+  async sessionFor(token: string | undefined): Promise<{ id: string; user: User } | null> {
     if (!token) return null;
     const session = await this.store.findSession(sessionId(token));
     if (!session) return null;
@@ -44,7 +55,28 @@ export class Auth {
       await this.store.deleteSession(session.id);
       return null;
     }
-    return session.user;
+    return { id: session.id, user: session.user };
+  }
+
+  async checkPassword(userId: number, password: string): Promise<boolean> {
+    const record = await this.store.findUserById(userId);
+    return !!record && (await this.hasher.verify(record.passwordHash, password));
+  }
+
+  /** Ends every session of the user, the one that asked included, and returns a fresh one for the asking browser. */
+  async changePassword(user: User, password: string) {
+    const passwordHash = await this.hasher.hash(password);
+    const { token, id, expiresAt } = this.newSession();
+    await this.store.setPassword(user.id, passwordHash, { id, expiresAt });
+    return { token, expiresAt };
+  }
+
+  async endAllSessions(userId: number) {
+    await this.store.deleteSessions(userId);
+  }
+
+  async deleteUser(userId: number) {
+    await this.store.deleteUser(userId);
   }
 
   async logout(token: string | undefined) {
@@ -52,9 +84,13 @@ export class Auth {
   }
 
   private async startSession(user: User) {
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(this.now() + SESSION_MS);
-    await this.store.createSession(sessionId(token), user.id, expiresAt);
+    const { token, id, expiresAt } = this.newSession();
+    await this.store.createSession(id, user.id, expiresAt);
     return { token, expiresAt };
+  }
+
+  private newSession() {
+    const token = randomBytes(32).toString("base64url");
+    return { token, id: sessionId(token), expiresAt: new Date(this.now() + SESSION_MS) };
   }
 }
