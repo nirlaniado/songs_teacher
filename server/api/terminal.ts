@@ -17,6 +17,7 @@ export function readSecret(question: string, input: Input = process.stdin, outpu
       input.off("error", onError);
       input.off("end", onEnd);
       input.off("close", onEnd);
+      output.off("error", onError);
       input.pause();
       setRawMode(false);
       if (newline) output.write("\n");
@@ -38,6 +39,7 @@ export function readSecret(question: string, input: Input = process.stdin, outpu
       input.on("error", onError);
       input.on("end", onEnd);
       input.on("close", onEnd);
+      output.on("error", onError);
       output.write(question);
       input.resume();
     } catch (error) {

@@ -143,6 +143,14 @@ describe("readSecret", () => {
     expect(t.input.raw).toEqual([true, false]);
   });
 
+  it("leaves raw mode and rejects when the output errors after the prompt", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    t.output.emit("error", new Error("EPIPE"));
+    await expect(secret).rejects.toThrow("EPIPE");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
   it("leaves raw mode and rejects when the input ends before Enter", async () => {
     const t = tty();
     const secret = readSecret("Password: ", t.input, t.output);
