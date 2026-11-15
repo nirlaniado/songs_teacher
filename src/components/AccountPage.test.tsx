@@ -42,6 +42,15 @@ const type = (scope: ReturnType<typeof section>, label: string, value: string) =
   fireEvent.change(scope.getByLabelText(label), { target: { value } });
 const signInScreen = () => screen.findByRole("heading", { name: "Sign in" });
 const sent = (path: string) => requests.filter((r) => r.path === path);
+/** The editor on its own, signed in, with or without unsaved changes. */
+const editor = (dirty: boolean) => {
+  useAuthStore.setState({ status: "signedIn", user: alice });
+  const deck = openDeck([Slide.parse({ id: "00000000-0000-4000-8000-0000000000e0", elements: [] })]);
+  useDeckStore.setState({ savedSnapshot: JSON.stringify(dirty ? { ...deck, title: "Older" } : deck) });
+  const onAccount = vi.fn();
+  render(<DeckScreen onBack={() => {}} onAccount={onAccount} />);
+  return onAccount;
+};
 
 describe("reaching the account page", () => {
   it("opens from the signed-in indicator and goes back to the app", async () => {
@@ -61,15 +70,6 @@ describe("reaching the account page", () => {
   });
 
   describe("from the editor, through the editor's unsaved-changes check", () => {
-    const editor = (dirty: boolean) => {
-      useAuthStore.setState({ status: "signedIn", user: alice });
-      const deck = openDeck([Slide.parse({ id: "00000000-0000-4000-8000-0000000000e0", elements: [] })]);
-      useDeckStore.setState({ savedSnapshot: JSON.stringify(dirty ? { ...deck, title: "Older" } : deck) });
-      const onAccount = vi.fn();
-      render(<DeckScreen onBack={() => {}} onAccount={onAccount} />);
-      return onAccount;
-    };
-
     it("goes straight there with nothing unsaved", () => {
       const onAccount = editor(false);
       fireEvent.click(screen.getByRole("button", { name: "Account" }));
@@ -83,6 +83,50 @@ describe("reaching the account page", () => {
       fireEvent.click(screen.getByRole("button", { name: "Account" }));
       expect(asked).toHaveBeenCalledWith("You have unsaved changes. Leave anyway?");
       expect(onAccount).toHaveBeenCalledTimes(calls);
+    });
+  });
+
+  describe("and Sign out in the editor goes through the same check", () => {
+    const signOut = () => fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    it("signs out straight away with nothing unsaved", async () => {
+      routes["POST /api/auth/logout"] = ok;
+      editor(false);
+      signOut();
+      await waitFor(() => expect(useAuthStore.getState().status).toBe("signedOut"));
+      expect(useDeckStore.getState().deck).toBeNull();
+    });
+
+    it("cancelled: no request, still signed in, still in the editor with the edits", async () => {
+      editor(true);
+      const asked = vi.fn(() => false);
+      vi.stubGlobal("confirm", asked);
+      signOut();
+      expect(asked).toHaveBeenCalledWith("You have unsaved changes. Leave anyway?");
+      expect(sent("/api/auth/logout")).toEqual([]);
+      expect(useAuthStore.getState().status).toBe("signedIn");
+      expect(useDeckStore.getState().isDirty()).toBe(true);
+      expect(screen.getByRole("button", { name: "← Presentations" })).toBeTruthy();
+    });
+
+    it("confirmed: signs out and closes the deck", async () => {
+      routes["POST /api/auth/logout"] = ok;
+      editor(true);
+      vi.stubGlobal("confirm", () => true);
+      signOut();
+      await waitFor(() => expect(useAuthStore.getState().status).toBe("signedOut"));
+      expect(sent("/api/auth/logout")).toHaveLength(1);
+      expect(useDeckStore.getState().deck).toBeNull();
+    });
+
+    it("confirmed but the server doesn't answer: still signed in, the deck and its edits still open", async () => {
+      routes["POST /api/auth/logout"] = () => "down";
+      editor(true);
+      vi.stubGlobal("confirm", () => true);
+      signOut();
+      expect((await screen.findByRole("alert")).textContent).toMatch(/^Couldn't sign out/);
+      expect(useAuthStore.getState().status).toBe("signedIn");
+      expect(useDeckStore.getState().isDirty()).toBe(true);
     });
   });
 });

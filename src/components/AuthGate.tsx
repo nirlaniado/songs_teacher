@@ -80,8 +80,15 @@ function SignIn() {
   );
 }
 
-/** "Signed in as …" and the way out. */
-export function AccountBadge({ onAccount }: { onAccount?: () => void }) {
+/**
+ * "Signed in as …" and the way out. A screen holding unsaved work passes `confirmLeave`, asked before signing out,
+ * and `onSignedOut`, run once the server has ended the session.
+ */
+export function AccountBadge({ onAccount, confirmLeave, onSignedOut }: {
+  onAccount?: () => void;
+  confirmLeave?: () => boolean;
+  onSignedOut?: () => void;
+}) {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const [error, setError] = useState<string | null>(null);
@@ -89,10 +96,12 @@ export function AccountBadge({ onAccount }: { onAccount?: () => void }) {
   if (!user) return null;
 
   async function leave() {
+    if (confirmLeave && !confirmLeave()) return;
     setBusy(true);
     const failure = await signOut();
     setBusy(false);
     setError(failure);
+    if (failure === null) onSignedOut?.();
   }
 
   return (

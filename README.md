@@ -136,11 +136,11 @@ not start it; run `npm run api:server` alongside them.
 
 | Endpoint | Does |
 |---|---|
-| `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken) |
+| `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken, or if it is `ADMIN_USERNAME`) |
 | `POST /api/auth/login` | `{username, password}` → signs in (401 on any failure) |
 | `POST /api/auth/logout` | deletes the session row and clears the cookie |
 | `GET /api/auth/me` | the signed-in user, or 401; `admin: true` only on the `ADMIN_USERNAME` account |
-| `POST /api/auth/password` | `{currentPassword, newPassword}` → changes it, keeps this session and ends every other one (403 on a wrong current password) |
+| `POST /api/auth/password` | `{currentPassword, newPassword}` → changes it, ends every session of the user (this one included) and signs this browser in with a new cookie (403 on a wrong current password) |
 | `POST /api/auth/logout-all` | ends every session of the user, this one included, and clears the cookie |
 | `DELETE /api/auth/account` | `{password}` → deletes the user and all their sessions (403 on a wrong password, and always for the admin account) |
 | `GET /api/health` | 200 `{database: "reachable"}`, 503 `"unreachable"` or `"not configured"` |
@@ -154,8 +154,10 @@ for 15 minutes after 5 failed logins from any IP. Changing the password and dele
 account check the current password, so they carry the same per-IP limit, and a wrong password
 there counts towards the same per-username lockout: a stolen session can't be used to guess it.
 
-`ADMIN_USERNAME` names the owner's account (matched ignoring case). For now the API only uses
-it to refuse that account's self-deletion and to tell the page not to offer it.
+`ADMIN_USERNAME` names the owner's account (matched ignoring case). Public sign-up refuses it
+with the same answer, after the same hashing work, as a taken username, so it reveals nothing;
+that account is made by the admin command (#39), not through sign-up. The API also refuses its
+self-deletion and tells the page not to offer it.
 
 `TRUST_PROXY` (see `.env.example`) names the proxy in front of the API, so the API can
 see the real client IP and know whether the request was HTTPS. In development that is the

@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema.js";
@@ -30,10 +30,11 @@ export class MySqlStore implements AuthStore {
     const [row] = await this.conn.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
     return row ? { id: row.id, username: row.username, passwordHash: row.passwordHash } : null;
   }
-  async setPassword(userId: number, passwordHash: string, keepSessionId: string) {
+  async setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date }) {
     await this.conn.db.transaction(async (tx) => {
       await tx.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
-      await tx.delete(schema.sessions).where(and(eq(schema.sessions.userId, userId), ne(schema.sessions.id, keepSessionId)));
+      await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+      await tx.insert(schema.sessions).values({ id: session.id, userId, expiresAt: session.expiresAt });
     });
   }
   async deleteSessions(userId: number) {

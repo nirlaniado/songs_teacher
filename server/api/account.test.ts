@@ -35,14 +35,19 @@ const cleared = (res: { cookies: { name: string; value: string; expires?: Date }
 };
 
 describe("POST /api/auth/password", () => {
-  it("changes the password, keeps this session and ends every other one", async () => {
+  it("changes the password, ends every session including this one, and signs this browser in afresh", async () => {
     const { signup, login, me, password, call, store } = await setup();
     const here = await signup();
     const phone = await login();
     const laptop = await login();
     const res = await password(here, { currentPassword: creds.password, newPassword: NEW });
     expect([res.statusCode, res.json()]).toEqual([200, { ok: true }]);
-    expect(await me(here)).toBe(200);
+    const fresh = res.cookies.find((c) => c.name === "session")!;
+    expect(fresh.httpOnly).toBe(true);
+    expect(`session=${fresh.value}`).not.toBe(here);
+    expect(await me(`session=${fresh.value}`)).toBe(200);
+    // A copy of the cookie the change was made with (say, a stolen one) no longer works.
+    expect(await me(here)).toBe(401);
     expect(await me(phone)).toBe(401);
     expect(await me(laptop)).toBe(401);
     expect(store.sessionCount()).toBe(1);
@@ -163,8 +168,9 @@ describe("DELETE /api/auth/account", () => {
   });
 
   it("refuses the admin account, whatever the case of its name, even with the right password", async () => {
-    const { signup, me, remove, call } = await setup({ adminUsername: "Owner" });
-    const owner = await signup({ username: "owner", password: "password789" });
+    const { login, me, remove, call, store } = await setup({ adminUsername: "Owner" });
+    await store.createUser("owner", await plain.hash("password789"));
+    const owner = await login({ username: "owner", password: "password789" });
     const res = await remove(owner, { password: "password789" });
     expect([res.statusCode, res.json()]).toEqual([403, { error: "The admin account can't be deleted." }]);
     expect(await me(owner)).toBe(200);
@@ -172,8 +178,9 @@ describe("DELETE /api/auth/account", () => {
   });
 
   it("tells the page which account is the admin, and nobody else", async () => {
-    const { signup, call } = await setup({ adminUsername: "owner" });
-    const owner = await signup({ username: "Owner", password: "password789" });
+    const { signup, login, call, store } = await setup({ adminUsername: "owner" });
+    await store.createUser("Owner", await plain.hash("password789"));
+    const owner = await login({ username: "Owner", password: "password789" });
     const alice = await signup();
     expect((await call("GET", "/api/auth/me", undefined, owner)).json()).toEqual({ user: { id: 1, username: "Owner", admin: true } });
     expect((await call("GET", "/api/auth/me", undefined, alice)).json()).toEqual({ user: { id: 2, username: "alice" } });
@@ -200,5 +207,29 @@ describe("DELETE /api/auth/account", () => {
     expect((await limited.remove(there, { password: "not my password" }, "203.0.113.9")).statusCode).toBe(403);
     expect((await limited.remove(there, { password: creds.password }, "203.0.113.9")).statusCode).toBe(429);
     expect(await limited.me(there)).toBe(200);
+  });
+});
+
+describe("the admin username at public sign-up", () => {
+  it("is refused whatever its case, exactly as a taken username is, and no account is made", async () => {
+    let hashes = 0;
+    const counting: Hasher = { hash: async (p) => { hashes++; return plain.hash(p); }, verify: plain.verify };
+    const { signup, call, store } = await setup({ adminUsername: "Owner", hasher: counting });
+    await signup();
+    const work = async (body: object) => {
+      const before = hashes;
+      const res = await call("POST", "/api/auth/signup", body);
+      return { status: res.statusCode, body: res.json(), cookie: res.headers["set-cookie"], hashes: hashes - before };
+    };
+    const taken = await work({ username: "ALICE", password: "password456" });
+    expect(taken).toEqual({ status: 409, body: { error: "That username is taken." }, cookie: undefined, hashes: 1 });
+    for (const username of ["owner", "Owner", "OWNER"]) expect(await work({ username, password: "password456" })).toEqual(taken);
+    expect(await store.findUser("owner")).toBeNull();
+  });
+
+  it("is an ordinary username when ADMIN_USERNAME is unset", async () => {
+    const { signup, call } = await setup();
+    await signup({ username: "owner", password: "password789" });
+    expect((await call("POST", "/api/auth/login", { username: "owner", password: "password789" })).json()).toEqual({ user: { id: 1, username: "owner" } });
   });
 });

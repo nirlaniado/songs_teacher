@@ -9,8 +9,8 @@ export interface AuthStore {
   createUser(username: string, passwordHash: string): Promise<User>;
   findUser(username: string): Promise<UserRecord | null>;
   findUserById(id: number): Promise<UserRecord | null>;
-  /** Replaces the password hash and ends every session of that user except `keepSessionId`, together. */
-  setPassword(userId: number, passwordHash: string, keepSessionId: string): Promise<void>;
+  /** Replaces the password hash, ends every session of that user and starts `session` for them, all together. */
+  setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date }): Promise<void>;
   deleteSessions(userId: number): Promise<void>;
   /** Deletes the user and every session of theirs. */
   deleteUser(userId: number): Promise<void>;
@@ -41,11 +41,12 @@ export class MemoryStore implements AuthStore {
     this.check();
     return this.users.find((u) => u.id === id) ?? null;
   }
-  async setPassword(userId: number, passwordHash: string, keepSessionId: string) {
+  async setPassword(userId: number, passwordHash: string, session: { id: string; expiresAt: Date }) {
     this.check();
     const user = this.users.find((u) => u.id === userId);
     if (user) user.passwordHash = passwordHash;
-    for (const [id, s] of this.sessions) if (s.userId === userId && id !== keepSessionId) this.sessions.delete(id);
+    for (const [id, s] of this.sessions) if (s.userId === userId) this.sessions.delete(id);
+    this.sessions.set(session.id, { userId, expiresAt: session.expiresAt });
   }
   async deleteSessions(userId: number) {
     this.check();

@@ -222,7 +222,8 @@ describe("the signed-in indicator", () => {
   it("is in the editor, and signs out from there", async () => {
     useAuthStore.setState({ status: "signedIn", user: alice });
     routes["POST /api/auth/logout"] = () => json(200, { ok: true });
-    openDeck([Slide.parse({ id: "00000000-0000-4000-8000-0000000000e0", elements: [] })]);
+    const deck = openDeck([Slide.parse({ id: "00000000-0000-4000-8000-0000000000e0", elements: [] })]);
+    useDeckStore.setState({ savedSnapshot: JSON.stringify(deck) });
     render(<DeckScreen onBack={() => {}} />);
     expect(screen.getByText(/signed in as/i).textContent).toBe("Signed in as alice");
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));

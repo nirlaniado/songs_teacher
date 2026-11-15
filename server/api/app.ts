@@ -33,7 +33,8 @@ export async function buildApp(options: AppOptions) {
   const auth = store && new Auth(store, options.hasher, options.now);
   await auth?.init();
   const throttle = new LoginThrottle(options.lockout?.max, options.lockout?.windowMs, options.now);
-  const isAdmin = (user: User) => !!options.adminUsername && user.username.toLowerCase() === options.adminUsername.toLowerCase();
+  const isAdminName = (username: string) => !!options.adminUsername && username.toLowerCase() === options.adminUsername.toLowerCase();
+  const isAdmin = (user: User) => isAdminName(user.username);
   const present = (user: User) => (isAdmin(user) ? { ...user, admin: true } : user);
 
   /**
@@ -78,7 +79,8 @@ export async function buildApp(options: AppOptions) {
       const input = Credentials.safeParse(req.body);
       if (!input.success) return badInput(reply, input.error.issues);
       try {
-        const session = await auth!.signup(input.data.username, input.data.password);
+        // The admin account is never made here (#39): its name answers exactly like a taken one.
+        const session = await auth!.signup(input.data.username, input.data.password, isAdminName(input.data.username));
         setSession(req, reply, session.token, session.expiresAt);
         return reply.code(201).send({ user: present(session.user) });
       } catch (error) {
@@ -123,7 +125,8 @@ export async function buildApp(options: AppOptions) {
       const input = PasswordChange.safeParse(req.body);
       if (!input.success) return badInput(reply, input.error.issues);
       if (await refusePassword(session.user, input.data.currentPassword, reply)) return reply;
-      await auth!.changePassword(session, input.data.newPassword);
+      const fresh = await auth!.changePassword(session.user, input.data.newPassword);
+      setSession(req, reply, fresh.token, fresh.expiresAt);
       return { ok: true };
     });
 

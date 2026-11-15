@@ -122,8 +122,9 @@ export function DeckScreen({ onBack, onAccount }: { onBack: () => void; onAccoun
 
   if (presenting) return <PresentMode onExit={() => setPresenting(false)} />;
 
+  const mayLeave = () => !isDirty() || confirm("You have unsaved changes. Leave anyway?");
   function leave(to: () => void) {
-    if (isDirty() && !confirm("You have unsaved changes. Leave anyway?")) return;
+    if (!mayLeave()) return;
     closeDeck();
     to();
   }
@@ -150,7 +151,7 @@ export function DeckScreen({ onBack, onAccount }: { onBack: () => void; onAccoun
           >
             <Icon name="focus" /> Focus
           </Button>
-          <AccountBadge onAccount={onAccount && (() => leave(onAccount))} />
+          <AccountBadge onAccount={onAccount && (() => leave(onAccount))} confirmLeave={mayLeave} onSignedOut={closeDeck} />
         </div>
       )}
 

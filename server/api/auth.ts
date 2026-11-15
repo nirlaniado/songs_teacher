@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { hash, verify } from "@node-rs/argon2";
-import type { AuthStore, User } from "./store.js";
+import { UsernameTaken, type AuthStore, type User } from "./store.js";
 
 export const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -21,8 +21,11 @@ export class Auth {
     this.dummyHash ??= await this.hasher.hash(randomBytes(16).toString("hex"));
   }
 
-  async signup(username: string, password: string) {
-    const user = await this.store.createUser(username, await this.hasher.hash(password));
+  /** A `reserved` name is refused as taken, after the same hashing work, so neither answer nor timing tells it apart. */
+  async signup(username: string, password: string, reserved = false) {
+    const passwordHash = await this.hasher.hash(password);
+    if (reserved) throw new UsernameTaken();
+    const user = await this.store.createUser(username, passwordHash);
     return { user, ...(await this.startSession(user)) };
   }
 
@@ -56,9 +59,12 @@ export class Auth {
     return !!record && (await this.hasher.verify(record.passwordHash, password));
   }
 
-  /** Keeps the session that asked; every other session of the user ends. */
-  async changePassword(session: { id: string; user: User }, password: string) {
-    await this.store.setPassword(session.user.id, await this.hasher.hash(password), session.id);
+  /** Ends every session of the user, the one that asked included, and returns a fresh one for the asking browser. */
+  async changePassword(user: User, password: string) {
+    const passwordHash = await this.hasher.hash(password);
+    const { token, id, expiresAt } = this.newSession();
+    await this.store.setPassword(user.id, passwordHash, { id, expiresAt });
+    return { token, expiresAt };
   }
 
   async endAllSessions(userId: number) {
@@ -74,9 +80,13 @@ export class Auth {
   }
 
   private async startSession(user: User) {
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(this.now() + SESSION_MS);
-    await this.store.createSession(sessionId(token), user.id, expiresAt);
+    const { token, id, expiresAt } = this.newSession();
+    await this.store.createSession(id, user.id, expiresAt);
     return { token, expiresAt };
+  }
+
+  private newSession() {
+    const token = randomBytes(32).toString("base64url");
+    return { token, id: sessionId(token), expiresAt: new Date(this.now() + SESSION_MS) };
   }
 }
