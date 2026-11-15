@@ -23,6 +23,7 @@ const crossOriginIsolation = {
 const proxy = {
   "/api/ug": "http://127.0.0.1:4318",
   "/api/auth": apiProxy(),
+  "/api/admin": apiProxy(),
   "/api/health": apiProxy(),
 };
 

@@ -17,7 +17,8 @@
     "dev:agent": "node --import tsx server/ug/dev.ts",
     "api:server": "node --import tsx server/api/server.ts",
     "api:migrate": "node --import tsx server/api/migrate.ts",
-    "api:generate": "drizzle-kit generate"
+    "api:generate": "drizzle-kit generate",
+    "api:make-admin": "node --import tsx server/api/make-admin.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
