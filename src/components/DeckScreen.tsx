@@ -8,6 +8,7 @@ import { SlidePanel } from "./deck/SlidePanel.js";
 import { TimingPanel } from "./deck/TimingPanel.js";
 import { useFullscreen } from "./deck/useFullscreen.js";
 import { Button } from "./controls.js";
+import { AccountBadge } from "./AuthGate.js";
 import { Icon } from "./icons.js";
 
 /**
@@ -148,6 +149,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           >
             <Icon name="focus" /> Focus
           </Button>
+          <AccountBadge />
         </div>
       )}
 

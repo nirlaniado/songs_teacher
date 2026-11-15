@@ -3,6 +3,7 @@ import { filterDecks, newestFirst, waveformBars, type LibraryView } from "../dec
 import type { DeckSummary, Slide, Theme } from "../schema/deck.js";
 import { useDeckStore } from "../store/deckStore.js";
 import { Button, Field } from "./controls.js";
+import { AccountBadge } from "./AuthGate.js";
 import { SlideRenderer, imagePathsOf } from "./deck/SlideRenderer.js";
 import { useDeckAssets } from "./deck/useDeckAssets.js";
 import { Icon } from "./icons.js";
@@ -312,9 +313,12 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
             <span className="wordmark">
               <Icon name="library" size={22} /> songs-teacher
             </span>
-            <Button variant="subtle" size="sm" onClick={() => void detach()}>
-              <Icon name="exit" /> Close library
-            </Button>
+            <div className="flex items-center gap-3">
+              <AccountBadge />
+              <Button variant="subtle" size="sm" onClick={() => void detach()}>
+                <Icon name="exit" /> Close library
+              </Button>
+            </div>
           </header>
 
           <div className="hero-copy hero-rise">
