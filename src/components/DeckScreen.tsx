@@ -25,7 +25,7 @@ import { Icon } from "./icons.js";
  * Present mode, by contrast, *does* replace the editor — it plays audio, and
  * layering it over a live editor would leave two players running.
  */
-export function DeckScreen({ onBack, onAccount }: { onBack: () => void; onAccount?: () => void }) {
+export function DeckScreen({ onBack, onAccount, onAdmin }: { onBack: () => void; onAccount?: () => void; onAdmin?: () => void }) {
   const deck = useDeckStore((s) => s.deck);
   const error = useDeckStore((s) => s.error);
   const isDirty = useDeckStore((s) => s.isDirty);
@@ -151,7 +151,7 @@ export function DeckScreen({ onBack, onAccount }: { onBack: () => void; onAccoun
           >
             <Icon name="focus" /> Focus
           </Button>
-          <AccountBadge onAccount={onAccount && (() => leave(onAccount))} confirmLeave={mayLeave} onSignedOut={closeDeck} />
+          <AccountBadge onAccount={onAccount && (() => leave(onAccount))} onAdmin={onAdmin && (() => leave(onAdmin))} confirmLeave={mayLeave} onSignedOut={closeDeck} />
         </div>
       )}
 

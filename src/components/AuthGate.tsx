@@ -2,10 +2,12 @@ import { useEffect, useId, useState, type FormEvent, type ReactNode } from "reac
 import type { Mode } from "../auth/client.js";
 import { useAuthStore } from "../store/authStore.js";
 import { Button, Field } from "./controls.js";
+import { ForcedPasswordChange } from "./ForcedPasswordChange.js";
 
 /** Nothing below this renders until the server says who is signed in. */
 export function AuthGate({ children }: { children: ReactNode }) {
   const status = useAuthStore((s) => s.status);
+  const mustChange = useAuthStore((s) => !!s.user?.mustChangePassword);
   const check = useAuthStore((s) => s.check);
 
   useEffect(() => {
@@ -15,8 +17,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (status === "checking") return <Centered><p className="text-sm text-faint">Checking your sign-in…</p></Centered>;
   if (status === "unreachable") return <Unreachable onRetry={() => void check()} />;
   if (status === "signedOut") return <SignIn />;
-  // SEAM (#39, #38): when the API reports that an admin reset this account's password, route to a
-  // change-password form here instead of the app. /api/auth/me carries no such flag yet.
+  // After an admin reset, the whole app waits for a new password: no editor, no account page.
+  if (mustChange) return <ForcedPasswordChange />;
   return children;
 }
 
@@ -84,8 +86,10 @@ function SignIn() {
  * "Signed in as …" and the way out. A screen holding unsaved work passes `confirmLeave`, asked before signing out,
  * and `onSignedOut`, run once the server has ended the session.
  */
-export function AccountBadge({ onAccount, confirmLeave, onSignedOut }: {
+export function AccountBadge({ onAccount, onAdmin, confirmLeave, onSignedOut }: {
   onAccount?: () => void;
+  /** Rendered only for the admin account; the API refuses everyone else regardless. */
+  onAdmin?: () => void;
   confirmLeave?: () => boolean;
   onSignedOut?: () => void;
 }) {
@@ -108,6 +112,7 @@ export function AccountBadge({ onAccount, confirmLeave, onSignedOut }: {
     <div className="flex items-center gap-2 text-xs text-muted">
       <span>Signed in as <strong className="font-semibold text-fg">{user.username}</strong></span>
       {onAccount && <Button variant="subtle" size="sm" onClick={onAccount}>Account</Button>}
+      {onAdmin && user.admin && <Button variant="subtle" size="sm" onClick={onAdmin}>Admin</Button>}
       <Button variant="subtle" size="sm" onClick={() => void leave()} disabled={busy}>Sign out</Button>
       {error && <span role="alert" className="text-danger">{error}</span>}
     </div>
