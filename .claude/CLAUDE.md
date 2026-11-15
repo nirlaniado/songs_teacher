@@ -23,8 +23,11 @@ harmonic analysis, plus a knowledge graph linking songs by shared harmony. Still
 reachable from the start screen, no longer what the app is for.
 
 **The accounts backend** (`server/api/`) stores users and sessions only — no decks, songs or
-audio live on the server. No email, password reset or third-party sign-in yet. Until the
-editor is gated behind login (issue #36), it still runs without the backend.
+audio live on the server. No email, password reset or third-party sign-in yet. The app
+requires it: on load it asks `GET /api/auth/me`, and with the API down (or answering 5xx) it
+shows only a "can't reach the server" screen with Retry — no editor, no chord agent. Start it
+with `npm run api:server` (needs `DATABASE_URL`) alongside `npm start` or `npm run dev`;
+neither of those starts the accounts API.
 
 ### Product direction
 
