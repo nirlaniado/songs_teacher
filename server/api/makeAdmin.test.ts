@@ -128,6 +128,29 @@ describe("readSecret", () => {
     expect(t.input.raw).toEqual([true, false]);
   });
 
+  it("leaves raw mode and rejects when writing the prompt throws", async () => {
+    const t = tty();
+    const broken = Object.assign(new PassThrough(), { write() { throw new Error("EIO"); } });
+    await expect(readSecret("Password: ", t.input, broken)).rejects.toThrow("EIO");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
+  it("leaves raw mode and rejects when the input errors", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    t.input.emit("error", new Error("EIO"));
+    await expect(secret).rejects.toThrow("EIO");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
+  it("leaves raw mode and rejects when the input ends before Enter", async () => {
+    const t = tty();
+    const secret = readSecret("Password: ", t.input, t.output);
+    t.input.end("abc");
+    await expect(secret).rejects.toThrow("The input closed before the password was entered.");
+    expect(t.input.raw).toEqual([true, false]);
+  });
+
   it("refuses input that isn't a terminal, such as a pipe", async () => {
     const piped = new PassThrough();
     await expect(readSecret("Password: ", piped, new PassThrough())).rejects.toThrow("The password must be typed at a terminal.");
