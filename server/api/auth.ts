@@ -1,12 +1,14 @@
 import { createHash, randomBytes } from "node:crypto";
 import { hash, verify } from "@node-rs/argon2";
-import { UsernameTaken, type AuthStore, type User } from "./store.js";
+import { UsernameTaken, type AdminChange, type AuthStore, type User } from "./store.js";
 
 export const SESSION_DAYS = 30;
 const SESSION_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 
 export interface Hasher { hash(password: string): Promise<string>; verify(hash: string, password: string): Promise<boolean> }
 export const argon2: Hasher = { hash: (p) => hash(p), verify: (h, p) => verify(h, p) };
+
+export interface Session { id: string; user: User; mustChangePassword: boolean }
 
 export function sessionId(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -33,21 +35,27 @@ export class Auth {
     return { user, ...(await this.startSession(user)) };
   }
 
+  /**
+   * "disabled" only once the password has been verified, so it reveals nothing to someone without it: a wrong
+   * password on a disabled account is "wrong" like any other.
+   */
   async login(username: string, password: string) {
     const record = await this.store.findUser(username);
     // An unknown username still pays for one verify, so response time doesn't reveal which usernames exist.
     if (!this.dummyHash) throw new Error("Auth.init() must run before login.");
     const ok = await this.hasher.verify(record?.passwordHash ?? this.dummyHash, password);
-    if (!record || !ok) return null;
+    if (!record || !ok) return { kind: "wrong" } as const;
+    if (record.disabled) return { kind: "disabled" } as const;
     const user = { id: record.id, username: record.username };
-    return { user, ...(await this.startSession(user)) };
+    return { kind: "ok", user, mustChangePassword: record.mustChangePassword, ...(await this.startSession(user)) } as const;
   }
 
   async userFor(token: string | undefined): Promise<User | null> {
     return (await this.sessionFor(token))?.user ?? null;
   }
 
-  async sessionFor(token: string | undefined): Promise<{ id: string; user: User } | null> {
+  /** A disabled user's session counts for nothing, even one that slipped in while the account was being disabled. */
+  async sessionFor(token: string | undefined): Promise<Session | null> {
     if (!token) return null;
     const session = await this.store.findSession(sessionId(token));
     if (!session) return null;
@@ -55,7 +63,8 @@ export class Auth {
       await this.store.deleteSession(session.id);
       return null;
     }
-    return { id: session.id, user: session.user };
+    if (session.disabled) return null;
+    return { id: session.id, user: session.user, mustChangePassword: session.mustChangePassword };
   }
 
   async checkPassword(userId: number, password: string): Promise<boolean> {
@@ -83,9 +92,21 @@ export class Auth {
     if (token) await this.store.deleteSession(sessionId(token));
   }
 
+  /** A strong temporary password, returned once to the admin; it is stored only as a hash. */
+  async resetPassword(userId: number) {
+    const temporaryPassword = randomBytes(18).toString("base64url");
+    const user = await this.store.adminChange(userId, { action: "reset-password", passwordHash: await this.hasher.hash(temporaryPassword) }, new Date(this.now()));
+    return user && { user, temporaryPassword };
+  }
+
+  async adminChange(userId: number, change: Exclude<AdminChange, { action: "reset-password" }>) {
+    return this.store.adminChange(userId, change, new Date(this.now()));
+  }
+
   private async startSession(user: User) {
     const { token, id, expiresAt } = this.newSession();
     await this.store.createSession(id, user.id, expiresAt);
+    await this.store.recordSignIn(user.id, new Date(this.now()));
     return { token, expiresAt };
   }
 

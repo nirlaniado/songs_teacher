@@ -358,12 +358,13 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 658 tests; needs no database
+npm test           # vitest — 709 tests; needs no database
 npm run typecheck  # app, chord agent and accounts backend tsconfigs
 npm run build      # typecheck + production build
 npm run api:server   # accounts backend on 127.0.0.1:4319 (needs DATABASE_URL)
 npm run api:migrate  # apply server/api/migrations to DATABASE_URL
 npm run api:generate # after editing server/api/schema.ts: write a new migration, commit it
+npm run api:make-admin # create the ADMIN_USERNAME account; the password is typed, never passed
 ```
 
 Auth logic is tested against `MemoryStore`, an in-memory `AuthStore`; `db.test.ts`

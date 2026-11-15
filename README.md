@@ -37,6 +37,7 @@ both. (`npm run dev:agent` is the same command under its older name.)
 npm test             # unit tests
 npm run typecheck
 npm run api:migrate  # accounts backend: apply migrations to DATABASE_URL
+npm run api:make-admin # accounts backend: create the ADMIN_USERNAME account (asks for its password)
 npm run api:server   # accounts backend on 127.0.0.1:4319
 npm run build        # typecheck + production build
 ```
@@ -131,19 +132,42 @@ not start it; run `npm run api:server` alongside them.
    database for it.
 2. Put its URL in `.env` as `DATABASE_URL` (see `.env.example`).
 3. `npm run api:migrate` applies the committed SQL migrations in `server/api/migrations/`.
-4. `npm run api:server` starts the service on `127.0.0.1:4319`. Vite proxies `/api/auth` and
-   `/api/health` to it in `dev` and `preview`.
+4. With `ADMIN_USERNAME` set in `.env`, `npm run api:make-admin` creates the owner's account. It
+   asks for the password on the terminal, without echo, twice; never as an argument or from the
+   environment. If the account exists it only offers to set a new password, which signs that
+   account out everywhere.
+5. `npm run api:server` starts the service on `127.0.0.1:4319`. Vite proxies `/api/auth`,
+   `/api/admin` and `/api/health` to it in `dev` and `preview`.
 
 | Endpoint | Does |
 |---|---|
 | `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken, or if it is `ADMIN_USERNAME`) |
-| `POST /api/auth/login` | `{username, password}` → signs in (401 on any failure) |
+| `POST /api/auth/login` | `{username, password}` → signs in (401 on a wrong username or password; 403 `account_disabled` only once the password is right) |
 | `POST /api/auth/logout` | deletes the session row and clears the cookie |
-| `GET /api/auth/me` | the signed-in user, or 401; `admin: true` only on the `ADMIN_USERNAME` account |
+| `GET /api/auth/me` | the signed-in user, or 401; `admin: true` only on the `ADMIN_USERNAME` account, `mustChangePassword: true` after an admin reset |
 | `POST /api/auth/password` | `{currentPassword, newPassword}` → changes it, ends every session of the user (this one included) and signs this browser in with a new cookie (403 on a wrong current password) |
 | `POST /api/auth/logout-all` | ends every session of the user, this one included, and clears the cookie |
 | `DELETE /api/auth/account` | `{password}` → deletes the user and all their sessions (403 on a wrong password, and always for the admin account) |
 | `GET /api/health` | 200 `{database: "reachable"}`, 503 `"unreachable"` or `"not configured"` |
+
+The admin's endpoints answer 401 when signed out and 403 to everyone but the `ADMIN_USERNAME`
+account. None of them can be aimed at the admin account itself (403).
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/admin/users?search=&page=&perPage=` | users by id: id, username, created at, disabled, must-change-password, last sign-in, admin; `search` matches part of the username ignoring case; `perPage` up to 100 |
+| `POST /api/admin/users/:id/disable` | blocks sign-in and ends all that user's sessions |
+| `POST /api/admin/users/:id/enable` | allows sign-in again |
+| `POST /api/admin/users/:id/reset-password` | returns `{temporaryPassword}` once, ends all that user's sessions and sets must-change-password |
+| `DELETE /api/admin/users/:id` | deletes the user and their sessions for good |
+| `GET /api/admin/audit?page=&perPage=` | every admin action, newest first: time, action, target user id and username |
+
+Each admin action and its `admin_audit` row are written in one transaction; the row keeps the
+target's id and username after the user is deleted. The temporary password comes from
+`crypto.randomBytes`, is stored only as a hash, and is never logged or audited. A
+must-change-password account can sign in, but every route except `GET /api/auth/me`,
+`POST /api/auth/password`, logout and logout-all answers 403 `must_change_password` until it
+changes its password. One hook in `app.ts` enforces that.
 
 Usernames are 3–32 letters, digits, `_` or `-`, unique ignoring case; passwords are at
 least 10 characters with no composition rules. Passwords are hashed with argon2id. The
@@ -156,7 +180,7 @@ there counts towards the same per-username lockout: a stolen session can't be us
 
 `ADMIN_USERNAME` names the owner's account (matched ignoring case). Public sign-up refuses it
 with the same answer, after the same hashing work, as a taken username, so it reveals nothing;
-that account is made by the admin command (#39), not through sign-up. The API also refuses its
+that account is made by `npm run api:make-admin`, not through sign-up. The API also refuses its
 self-deletion and tells the page not to offer it.
 
 `TRUST_PROXY` (see `.env.example`) names the proxy in front of the API, so the API can
