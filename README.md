@@ -6,7 +6,9 @@ Press Present and the track plays while the deck advances itself — built for m
 teachers who want to talk over a song instead of clicking through it.
 
 Optional extras: an Ultimate Guitar agent that fetches a song's chords and turns them into
-a deck, in-browser stem separation (mute vocals, solo bass), and a song-study mode.
+a deck, in-browser stem separation (mute vocals, solo bass), a song-study mode, and a small
+accounts backend (username/password on MySQL). The editor needs none of them, and nothing
+requires signing in.
 
 ## Quick start
 
@@ -34,6 +36,8 @@ both. (`npm run dev:agent` is the same command under its older name.)
 ```bash
 npm test             # unit tests
 npm run typecheck
+npm run api:migrate  # accounts backend: apply migrations to DATABASE_URL
+npm run api:server   # accounts backend on 127.0.0.1:4319
 npm run build        # typecheck + production build
 ```
 
@@ -101,7 +105,66 @@ src/
 ├── graph/            harmonic index — pure, rebuilt on demand, nothing persisted
 └── example/
     └── song.example.json
+
+server/
+├── ug/               the chord agent's local service (port 4318)
+└── api/              accounts backend (port 4319) — Fastify + Drizzle + MySQL
+    ├── app.ts          routes, cookie, rate limit; buildApp() takes any AuthStore
+    ├── throttle.ts     per-username login lockout
+    ├── proxy.ts        the Vite proxy entry for /api/auth and /api/health; never relays X-Forwarded-*
+    ├── auth.ts         argon2id hashing, 30-day sessions, constant-work login
+    ├── rules.ts        the one Zod schema for usernames and passwords
+    ├── store.ts        AuthStore interface + the in-memory fake the tests use
+    ├── db.ts · schema.ts  the MySQL store and its Drizzle tables
+    ├── migrate.ts      applies migrations/ (committed SQL)
+    └── server.ts       entry point, listens on 127.0.0.1:4319
 ```
+
+## Accounts backend
+
+A small Fastify service in `server/api/` that gives users username/password accounts in
+MySQL. No deck, song or audio is stored on the server. Until the editor is gated behind
+login (issue #36), it still runs without the backend.
+
+1. Have a MySQL 8.0.13+ server somewhere (the app assumes nothing about where) and an empty
+   database for it.
+2. Put its URL in `.env` as `DATABASE_URL` (see `.env.example`).
+3. `npm run api:migrate` applies the committed SQL migrations in `server/api/migrations/`.
+4. `npm run api:server` starts the service on `127.0.0.1:4319`. Vite proxies `/api/auth` and
+   `/api/health` to it in `dev` and `preview`.
+
+| Endpoint | Does |
+|---|---|
+| `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken) |
+| `POST /api/auth/login` | `{username, password}` → signs in (401 on any failure) |
+| `POST /api/auth/logout` | deletes the session row and clears the cookie |
+| `GET /api/auth/me` | the signed-in user, or 401 |
+| `GET /api/health` | 200 `{database: "reachable"}`, 503 `"unreachable"` or `"not configured"` |
+
+Usernames are 3–32 letters, digits, `_` or `-`, unique ignoring case; passwords are at
+least 10 characters with no composition rules. Passwords are hashed with argon2id. The
+session cookie is `httpOnly`, `SameSite=Lax`, `Secure` whenever the original request was
+HTTPS, and lasts 30 days; the database keeps only a SHA-256 of the cookie token. Signup and
+login are rate-limited to 10 attempts per minute per client IP, and a username is locked
+for 15 minutes after 5 failed logins from any IP.
+
+`TRUST_PROXY` (see `.env.example`) names the proxy in front of the API, so the API can
+see the real client IP and know whether the request was HTTPS. In development that is the
+Vite proxy on the same machine: set `loopback`. In production it is whatever reverse proxy
+the deployment puts in front of the API. It takes only explicit IPs, CIDRs and the names
+`loopback`, `linklocal` and `uniquelocal`; `true`, hop counts and `/0` are refused at
+startup, because trusting every hop lets a client forge its IP past the rate limit.
+
+The Vite proxy is a development server and trusts nobody: it always discards a caller's
+`X-Forwarded-For`/`-Proto`/`-Host` and reports its own connection instead. It does not read
+`TRUST_PROXY`.
+
+After changing `server/api/schema.ts`, run `npm run api:generate` to write a new migration
+and commit it. `npm test` needs no database; the MySQL store's own test runs only when
+`DATABASE_URL` is set, against a migrated database.
+
+**Docker files belong to the owner.** No Dockerfile, compose file or other container
+config is written by the agent team.
 
 ## Ultimate Guitar chord agent
 

@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { apiProxy } from "./server/api/proxy";
 
 /**
  * Cross-origin isolation, required by ONNX Runtime's threaded WASM backend
@@ -19,13 +20,19 @@ const crossOriginIsolation = {
   "Cross-Origin-Embedder-Policy": "credentialless",
 };
 
+const proxy = {
+  "/api/ug": "http://127.0.0.1:4318",
+  "/api/auth": apiProxy(),
+  "/api/health": apiProxy(),
+};
+
 // Vitest reads this file too (`npm test` = `vitest run`). The existing
 // schema tests are pure logic with no DOM, so no `test.environment` override
 // is needed yet — add `environment: "jsdom"` here if component tests show up.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  server: { headers: crossOriginIsolation, proxy: { "/api/ug": "http://127.0.0.1:4318" } },
-  preview: { headers: crossOriginIsolation, proxy: { "/api/ug": "http://127.0.0.1:4318" } },
+  server: { headers: crossOriginIsolation, proxy },
+  preview: { headers: crossOriginIsolation, proxy },
   // Pre-bundling the ORT WASM bundle breaks its worker/wasm asset resolution.
   optimizeDeps: { exclude: ["onnxruntime-web"] },
   // The lyric alignment worker imports ONNX Runtime dynamically, and only ES-module workers can split chunks.

@@ -22,6 +22,10 @@ Secondary and older: a song-study mode for marking sections of a track and writi
 harmonic analysis, plus a knowledge graph linking songs by shared harmony. Still works,
 reachable from the start screen, no longer what the app is for.
 
+**The accounts backend** (`server/api/`) stores users and sessions only — no decks, songs or
+audio live on the server. No email, password reset or third-party sign-in yet. Until the
+editor is gated behind login (issue #36), it still runs without the backend.
+
 ### Product direction
 
 The native React/TypeScript editor is the sole editing path. The experimental
@@ -286,6 +290,9 @@ Each was chosen against a real alternative. Don't substitute without a reason.
 | Separation library | **`demucs-web`**, not hand-ported inference | It owns STFT (4096/1024), reflect padding, segmentation and overlap-add — all easy to get subtly wrong. Costs: it hardcodes four sources, so a guitar stem isn't available. |
 | Stem storage | **WAV** | Trivial to encode with no dependency; the browser has no non-realtime MP3/Opus encoder. Costs ~10MB per stem-minute on disk. |
 | Isolation policy | **COEP `credentialless`**, not `require-corp` | `require-corp` blocks cross-origin subresources that don't opt in, which would break fetching the model from Hugging Face. |
+| Accounts backend | **Fastify + Drizzle ORM + MySQL**, in `server/api/` sharing the root `package.json` | Not a separate package/workspace: one install, one lockfile. Drizzle keeps the schema in TypeScript with committed SQL migrations. `DATABASE_URL` is the only config — nothing assumes where MySQL runs. |
+| Password hashing | **`@node-rs/argon2`** (argon2id) | Not `argon2` (node-gyp): ships prebuilt binaries, so `npm ci` on a clean runner needs no C toolchain. |
+| Sessions | **Server-side row + opaque cookie** | Not JWT: logout must actually end a session, which a stateless token can't do. The table holds a SHA-256 of the token, never the token, so a DB leak can't be replayed. Costs one query per `me`. |
 | Lyrics | **From the user's own Ultimate Guitar chart, or typed** | No lyrics *provider* is integrated (Musixmatch/LyricFind need commercial terms; lyric sites are off-limits). The chord agent keeps the lyrics on the chart the user's own subscribed account opens, and they are used on slides and to time the deck. |
 
 ---
@@ -348,10 +355,16 @@ for the *transition* out of fullscreen rather than testing "focus && !active", b
 ```bash
 npm start          # vite + the chord agent's local service together; Ctrl+C stops both
 npm run dev        # vite dev server only — the daily loop when the agent isn't needed
-npm test           # vitest — 532 tests
-npm run typecheck  # tsc --noEmit
+npm test           # vitest — 532 tests; needs no database
+npm run typecheck  # app, chord agent and accounts backend tsconfigs
 npm run build      # typecheck + production build
+npm run api:server   # accounts backend on 127.0.0.1:4319 (needs DATABASE_URL)
+npm run api:migrate  # apply server/api/migrations to DATABASE_URL
+npm run api:generate # after editing server/api/schema.ts: write a new migration, commit it
 ```
+
+Auth logic is tested against `MemoryStore`, an in-memory `AuthStore`; `db.test.ts`
+exercises the real MySQL store and is skipped unless `DATABASE_URL` is set.
 
 ---
 
@@ -494,6 +507,21 @@ Break these and the design stops working. Each was argued through, not defaulted
   exist on the load path — `attach()` outside a user gesture throws.
 - **`section.key` matters more than it looks** (song-study). A wrong key silently poisons
   every graph edge derived from that section.
+- **Behind a proxy, the API only knows what `TRUST_PROXY` lets it believe.** The `Secure`
+  cookie flag comes from `request.protocol` and rate limits key on `request.ip`; both read
+  `X-Forwarded-*` only from a trusted hop. Deciding `Secure` from the Host header was the
+  first attempt and was wrong: Vite's string proxy rewrites Host to `127.0.0.1`.
+  **The Vite proxy trusts nobody and doesn't read `TRUST_PROXY`.** The API trusts the Vite
+  hop (`TRUST_PROXY=loopback`), so anything Vite relays is believed. `apiProxy()` therefore
+  always discards incoming `X-Forwarded-*` and reports its own connection. Giving Vite the
+  API's trust list was tried and was wrong: a browser on the same machine connects from the
+  same loopback range as the Vite-to-API hop, so a direct client counted as a proxy and could
+  forge its IP and `Secure`. In production the proxy in front of the API is the deployment's,
+  not Vite. `TRUST_PROXY` refuses `true`, hop counts and `/0`: trusting every hop lets a
+  caller forge `X-Forwarded-For` past the IP limit. `proxy.test.ts` runs a real Vite proxy
+  with the API on `["loopback"]` and fails if Vite relays a caller's headers. Its negative
+  cases assert the request succeeded first — an earlier version checked "no `Secure`" on
+  responses that had been rate-limited, which passed for the wrong reason.
 - **Don't put `currentTime` in React state**, and don't use `timeupdate` (see the stack
   table).
 - **A mount point's inherited styles reach the slide.** Inherited properties cross into
@@ -572,6 +600,19 @@ src/
 │                     useDeckAssets, useFullscreen} · (song-study screens)
 ├── theory/ graph/    song-study: roman numerals, Booth's rotation, n-grams, edges
 └── types/            ambient .d.ts only (Vite env)
+
+server/
+├── ug/               chord agent's local service (127.0.0.1:4318)
+└── api/              accounts backend (127.0.0.1:4319)
+    ├── app.ts        buildApp({store}) — routes, cookie flags, rate limit, health
+    ├── auth.ts       argon2id, 30-day sessions, dummy-hash verify for unknown users
+    ├── throttle.ts   per-username lockout: 5 failed logins → 15 min, from any IP
+    ├── proxy.ts      Vite proxy entry: never relays X-Forwarded-*, reports its own connection
+    ├── rules.ts      the one Zod schema for username/password
+    ├── store.ts      AuthStore interface + MemoryStore (the tests' fake)
+    ├── db.ts · schema.ts   MySqlStore + Drizzle tables (users, sessions)
+    ├── migrations/   committed SQL from drizzle-kit
+    └── server.ts · migrate.ts · config.ts
 ```
 
 ### On disk
