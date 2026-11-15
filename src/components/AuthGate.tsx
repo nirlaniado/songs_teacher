@@ -81,7 +81,7 @@ function SignIn() {
 }
 
 /** "Signed in as …" and the way out. */
-export function AccountBadge() {
+export function AccountBadge({ onAccount }: { onAccount?: () => void }) {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +98,7 @@ export function AccountBadge() {
   return (
     <div className="flex items-center gap-2 text-xs text-muted">
       <span>Signed in as <strong className="font-semibold text-fg">{user.username}</strong></span>
+      {onAccount && <Button variant="subtle" size="sm" onClick={onAccount}>Account</Button>}
       <Button variant="subtle" size="sm" onClick={() => void leave()} disabled={busy}>Sign out</Button>
       {error && <span role="alert" className="text-danger">{error}</span>}
     </div>

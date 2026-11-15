@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema.js";
@@ -25,6 +25,25 @@ export class MySqlStore implements AuthStore {
     const [row] = await this.conn.db.select().from(schema.users)
       .where(sql`lower(${schema.users.username}) = ${username.toLowerCase()}`).limit(1);
     return row ? { id: row.id, username: row.username, passwordHash: row.passwordHash } : null;
+  }
+  async findUserById(id: number) {
+    const [row] = await this.conn.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
+    return row ? { id: row.id, username: row.username, passwordHash: row.passwordHash } : null;
+  }
+  async setPassword(userId: number, passwordHash: string, keepSessionId: string) {
+    await this.conn.db.transaction(async (tx) => {
+      await tx.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, userId));
+      await tx.delete(schema.sessions).where(and(eq(schema.sessions.userId, userId), ne(schema.sessions.id, keepSessionId)));
+    });
+  }
+  async deleteSessions(userId: number) {
+    await this.conn.db.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+  }
+  async deleteUser(userId: number) {
+    await this.conn.db.transaction(async (tx) => {
+      await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+      await tx.delete(schema.users).where(eq(schema.users.id, userId));
+    });
   }
   async createSession(id: string, userId: number, expiresAt: Date) {
     await this.conn.db.insert(schema.sessions).values({ id, userId, expiresAt });

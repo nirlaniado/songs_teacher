@@ -249,7 +249,7 @@ function Notice({ danger, children }: { danger?: boolean; children: ReactNode })
 }
 
 /** The start screen: make a presentation, or find one. Roughly the role LibreOffice's Start Center plays. */
-export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
+export function DeckLibraryScreen({ onOpen, onAccount }: { onOpen: () => void; onAccount?: () => void }) {
   const decks = useDeckStore((s) => s.decks);
   const loading = useDeckStore((s) => s.loadingDecks);
   const error = useDeckStore((s) => s.error);
@@ -314,7 +314,7 @@ export function DeckLibraryScreen({ onOpen }: { onOpen: () => void }) {
               <Icon name="library" size={22} /> songs-teacher
             </span>
             <div className="flex items-center gap-3">
-              <AccountBadge />
+              <AccountBadge onAccount={onAccount} />
               <Button variant="subtle" size="sm" onClick={() => void detach()}>
                 <Icon name="exit" /> Close library
               </Button>

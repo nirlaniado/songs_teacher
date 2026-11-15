@@ -6,39 +6,23 @@ import { waitFor as waitText } from "../auth/client.js";
 import { useAuthStore } from "../store/authStore.js";
 import { useDeckStore } from "../store/deckStore.js";
 import { openDeck, stubResizeObserver } from "../test/dom.js";
+import { json, stubAuthServer, type Route, type Sent } from "../test/http.js";
 import { Slide } from "../schema/deck.js";
 import { DeckScreen } from "./DeckScreen.js";
 
-// The whole app mounted behind the sign-in gate. There is no accounts server here: every /api/auth/*
-// request goes to the stub below, which answers the way server/api/app.ts does (status, JSON body,
-// Retry-After). A rejected fetch stands in for a server that is down.
-type Reply = Response | "down";
-type Route = (body: unknown) => Reply;
+// The whole app mounted behind the sign-in gate, against the stub accounts API in src/test/http.ts.
 let routes: Record<string, Route>;
-let requests: Array<{ method: string; path: string; body: unknown }>;
+let requests: Sent[];
 
-const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 const alice = { id: 1, username: "alice" };
 const signedIn = () => json(200, { user: alice });
 const signedOut = () => json(401, { error: "Not signed in." });
 
 beforeAll(stubResizeObserver);
 beforeEach(() => {
-  requests = [];
-  routes = {};
+  ({ routes, requests } = stubAuthServer());
   useAuthStore.setState({ status: "checking", user: null });
   useDeckStore.setState({ supported: true, attached: false, usingFallbackStorage: false, restoreOnLoad: async () => {} });
-  vi.stubGlobal("fetch", async (input: string, init: RequestInit = {}) => {
-    const method = init.method ?? "GET";
-    const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-    requests.push({ method, path: input, body });
-    const route = routes[`${method} ${input}`];
-    if (!route) throw new Error(`unexpected request ${method} ${input}`);
-    const reply = route(body);
-    if (reply === "down") throw new TypeError("Failed to fetch");
-    return reply;
-  });
 });
 afterEach(() => {
   cleanup();

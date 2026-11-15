@@ -31,4 +31,28 @@ describe.skipIf(!url)("MySqlStore", () => {
     await store.deleteSession(id);
     expect(await store.findSession(id)).toBeNull();
   });
+
+  it("changes a password ending every other session, ends all sessions, and deletes a user with theirs", async () => {
+    const user = (await store.findUser(username))!;
+    expect(await store.findUserById(user.id)).toEqual(user);
+    const expiresAt = new Date(Math.floor(Date.now() / 1000) * 1000 + 86_400_000);
+    const [keep, a, b] = [0, 1, 2].map(() => randomBytes(32).toString("hex")) as [string, string, string];
+    for (const id of [keep, a, b]) await store.createSession(id, user.id, expiresAt);
+
+    await store.setPassword(user.id, "new hash", keep);
+    expect((await store.findUserById(user.id))!.passwordHash).toBe("new hash");
+    expect(await store.findSession(keep)).not.toBeNull();
+    expect(await store.findSession(a)).toBeNull();
+    expect(await store.findSession(b)).toBeNull();
+
+    await store.createSession(a, user.id, expiresAt);
+    await store.deleteSessions(user.id);
+    expect(await store.findSession(keep)).toBeNull();
+    expect(await store.findSession(a)).toBeNull();
+
+    await store.createSession(keep, user.id, expiresAt);
+    await store.deleteUser(user.id);
+    expect(await store.findUserById(user.id)).toBeNull();
+    expect(await store.findSession(keep)).toBeNull();
+  });
 });

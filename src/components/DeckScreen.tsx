@@ -25,7 +25,7 @@ import { Icon } from "./icons.js";
  * Present mode, by contrast, *does* replace the editor — it plays audio, and
  * layering it over a live editor would leave two players running.
  */
-export function DeckScreen({ onBack }: { onBack: () => void }) {
+export function DeckScreen({ onBack, onAccount }: { onBack: () => void; onAccount?: () => void }) {
   const deck = useDeckStore((s) => s.deck);
   const error = useDeckStore((s) => s.error);
   const isDirty = useDeckStore((s) => s.isDirty);
@@ -122,11 +122,12 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
 
   if (presenting) return <PresentMode onExit={() => setPresenting(false)} />;
 
-  function handleBack() {
+  function leave(to: () => void) {
     if (isDirty() && !confirm("You have unsaved changes. Leave anyway?")) return;
     closeDeck();
-    onBack();
+    to();
   }
+  const handleBack = () => leave(onBack);
 
   return (
     <div ref={rootRef} className="flex h-screen flex-col bg-canvas">
@@ -149,7 +150,7 @@ export function DeckScreen({ onBack }: { onBack: () => void }) {
           >
             <Icon name="focus" /> Focus
           </Button>
-          <AccountBadge />
+          <AccountBadge onAccount={onAccount && (() => leave(onAccount))} />
         </div>
       )}
 

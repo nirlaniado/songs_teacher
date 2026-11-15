@@ -37,6 +37,10 @@ export class Auth {
   }
 
   async userFor(token: string | undefined): Promise<User | null> {
+    return (await this.sessionFor(token))?.user ?? null;
+  }
+
+  async sessionFor(token: string | undefined): Promise<{ id: string; user: User } | null> {
     if (!token) return null;
     const session = await this.store.findSession(sessionId(token));
     if (!session) return null;
@@ -44,7 +48,25 @@ export class Auth {
       await this.store.deleteSession(session.id);
       return null;
     }
-    return session.user;
+    return { id: session.id, user: session.user };
+  }
+
+  async checkPassword(userId: number, password: string): Promise<boolean> {
+    const record = await this.store.findUserById(userId);
+    return !!record && (await this.hasher.verify(record.passwordHash, password));
+  }
+
+  /** Keeps the session that asked; every other session of the user ends. */
+  async changePassword(session: { id: string; user: User }, password: string) {
+    await this.store.setPassword(session.user.id, await this.hasher.hash(password), session.id);
+  }
+
+  async endAllSessions(userId: number) {
+    await this.store.deleteSessions(userId);
+  }
+
+  async deleteUser(userId: number) {
+    await this.store.deleteUser(userId);
   }
 
   async logout(token: string | undefined) {
