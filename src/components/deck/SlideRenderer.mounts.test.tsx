@@ -108,7 +108,9 @@ async function mounted(mount: () => React.ReactElement) {
 }
 
 describe("a slide looks the same in every place it is mounted", () => {
-  it("draws the same content at every scale it is mounted at, sized to that scale", async () => {
+  // Six renders, each read back as every computed property of every node and its two pseudo-elements:
+  // about 2s alone, and past the default 5s while the rest of the suite runs alongside.
+  it("draws the same content at every scale it is mounted at, sized to that scale", { timeout: 20_000 }, async () => {
     const scaleFree = (nodes: Awaited<ReturnType<typeof alone>>) => nodes.map(({ path, style }) => {
       const { width: _w, height: _h, "inline-size": _i, "block-size": _b, transform: _t, "transform-origin": _o, ...rest } = style;
       return { path, style: path === "surface" || path === "layer" ? rest : style };

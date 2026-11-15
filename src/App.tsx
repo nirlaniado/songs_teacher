@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useDeckStore } from "./store/deckStore.js";
 import { useLibraryStore } from "./store/libraryStore.js";
 import { AppNav, type NavSection } from "./components/AppNav.js";
+import { AccountBadge, AuthGate } from "./components/AuthGate.js";
 import { DeckLibraryScreen } from "./components/DeckLibraryScreen.js";
 import { DeckScreen } from "./components/DeckScreen.js";
 import { LibraryScreen } from "./components/LibraryScreen.js";
@@ -17,6 +18,14 @@ const UltimateGuitarAgent = lazy(() => import("./components/UltimateGuitarAgent.
 type Screen = "decks" | "editor" | "songs" | "graph" | "ug";
 
 export default function App() {
+  return (
+    <AuthGate>
+      <Workspace />
+    </AuthGate>
+  );
+}
+
+function Workspace() {
   const [screen, setScreen] = useState<Screen>("decks");
 
   const supported = useDeckStore((s) => s.supported);
@@ -93,6 +102,7 @@ export default function App() {
           </Button>
           {error && <p className="max-w-sm text-center text-xs text-danger">{error}</p>}
           <Button variant="subtle" className="mt-3" onClick={() => setScreen("ug")}>Chord agent · Ultimate Guitar</Button>
+          <div className="mt-6"><AccountBadge /></div>
         </div>
       </Centered>
     );
