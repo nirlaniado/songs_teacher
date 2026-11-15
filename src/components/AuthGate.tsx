@@ -80,8 +80,15 @@ function SignIn() {
   );
 }
 
-/** "Signed in as …" and the way out. */
-export function AccountBadge() {
+/**
+ * "Signed in as …" and the way out. A screen holding unsaved work passes `confirmLeave`, asked before signing out,
+ * and `onSignedOut`, run once the server has ended the session.
+ */
+export function AccountBadge({ onAccount, confirmLeave, onSignedOut }: {
+  onAccount?: () => void;
+  confirmLeave?: () => boolean;
+  onSignedOut?: () => void;
+}) {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const [error, setError] = useState<string | null>(null);
@@ -89,15 +96,18 @@ export function AccountBadge() {
   if (!user) return null;
 
   async function leave() {
+    if (confirmLeave && !confirmLeave()) return;
     setBusy(true);
     const failure = await signOut();
     setBusy(false);
     setError(failure);
+    if (failure === null) onSignedOut?.();
   }
 
   return (
     <div className="flex items-center gap-2 text-xs text-muted">
       <span>Signed in as <strong className="font-semibold text-fg">{user.username}</strong></span>
+      {onAccount && <Button variant="subtle" size="sm" onClick={onAccount}>Account</Button>}
       <Button variant="subtle" size="sm" onClick={() => void leave()} disabled={busy}>Sign out</Button>
       {error && <span role="alert" className="text-danger">{error}</span>}
     </div>

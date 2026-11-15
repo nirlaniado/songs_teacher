@@ -3,8 +3,8 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { Auth, type Hasher } from "./auth.js";
 import type { TrustProxy } from "./config.js";
-import { Credentials } from "./rules.js";
-import { UsernameTaken, type AuthStore } from "./store.js";
+import { AccountDeletion, Credentials, PasswordChange } from "./rules.js";
+import { UsernameTaken, type AuthStore, type User } from "./store.js";
 import { LoginThrottle } from "./throttle.js";
 
 export const COOKIE = "session";
@@ -20,6 +20,8 @@ export interface AppOptions {
   /** Which proxies may set X-Forwarded-*; decides the client IP and whether the request was HTTPS. */
   trustProxy?: TrustProxy;
   logger?: boolean | { level: string };
+  /** ADMIN_USERNAME: that account can't delete itself. */
+  adminUsername?: string;
 }
 
 export async function buildApp(options: AppOptions) {
@@ -31,6 +33,30 @@ export async function buildApp(options: AppOptions) {
   const auth = store && new Auth(store, options.hasher, options.now);
   await auth?.init();
   const throttle = new LoginThrottle(options.lockout?.max, options.lockout?.windowMs, options.now);
+  const isAdminName = (username: string) => !!options.adminUsername && username.toLowerCase() === options.adminUsername.toLowerCase();
+  const isAdmin = (user: User) => isAdminName(user.username);
+  const present = (user: User) => (isAdmin(user) ? { ...user, admin: true } : user);
+
+  /**
+   * Checks a signed-in user's own password, under the same per-account lockout as login. Sends the refusal and
+   * returns true if refused. A boolean, not the reply: a reply is thenable, so an async function can't return it.
+   */
+  async function refusePassword(user: User, password: string, reply: FastifyReply): Promise<boolean> {
+    const wait = throttle.lockedFor(user.username);
+    if (wait) {
+      reply.code(429).header("Retry-After", Math.ceil(wait / 1000)).send({ error: "Too many failed attempts for this account. Try again later." });
+      return true;
+    }
+    if (await auth!.checkPassword(user.id, password)) {
+      throttle.succeed(user.username);
+      return false;
+    }
+    throttle.fail(user.username);
+    reply.code(403).send({ error: "Wrong password." });
+    return true;
+  }
+  const badInput = (reply: FastifyReply, issues: { message: string }[]) => reply.code(400).send({ error: issues[0]?.message ?? "Invalid input." });
+  const notSignedIn = (reply: FastifyReply) => reply.code(401).send({ error: "Not signed in." });
 
   app.addHook("onSend", async (_req, reply) => { reply.header("Cache-Control", "no-store"); });
 
@@ -51,11 +77,12 @@ export async function buildApp(options: AppOptions) {
 
     routes.post("/api/auth/signup", { config: limit }, async (req, reply) => {
       const input = Credentials.safeParse(req.body);
-      if (!input.success) return reply.code(400).send({ error: input.error.issues[0]?.message ?? "Invalid input." });
+      if (!input.success) return badInput(reply, input.error.issues);
       try {
-        const session = await auth!.signup(input.data.username, input.data.password);
+        // The admin account is never made here (#39): its name answers exactly like a taken one.
+        const session = await auth!.signup(input.data.username, input.data.password, isAdminName(input.data.username));
         setSession(req, reply, session.token, session.expiresAt);
-        return reply.code(201).send({ user: session.user });
+        return reply.code(201).send({ user: present(session.user) });
       } catch (error) {
         if (error instanceof UsernameTaken) return reply.code(409).send({ error: "That username is taken." });
         throw error;
@@ -77,7 +104,7 @@ export async function buildApp(options: AppOptions) {
       }
       throttle.succeed(input.data!.username);
       setSession(req, reply, session.token, session.expiresAt);
-      return { user: session.user };
+      return { user: present(session.user) };
     });
 
     routes.post("/api/auth/logout", async (req, reply) => {
@@ -88,8 +115,39 @@ export async function buildApp(options: AppOptions) {
 
     routes.get("/api/auth/me", async (req, reply) => {
       const user = await auth!.userFor(req.cookies[COOKIE]);
-      if (!user) return reply.code(401).send({ error: "Not signed in." });
-      return { user };
+      if (!user) return notSignedIn(reply);
+      return { user: present(user) };
+    });
+
+    routes.post("/api/auth/password", { config: limit }, async (req, reply) => {
+      const session = await auth!.sessionFor(req.cookies[COOKIE]);
+      if (!session) return notSignedIn(reply);
+      const input = PasswordChange.safeParse(req.body);
+      if (!input.success) return badInput(reply, input.error.issues);
+      if (await refusePassword(session.user, input.data.currentPassword, reply)) return reply;
+      const fresh = await auth!.changePassword(session.user, input.data.newPassword);
+      setSession(req, reply, fresh.token, fresh.expiresAt);
+      return { ok: true };
+    });
+
+    routes.post("/api/auth/logout-all", async (req, reply) => {
+      const session = await auth!.sessionFor(req.cookies[COOKIE]);
+      if (!session) return notSignedIn(reply);
+      await auth!.endAllSessions(session.user.id);
+      reply.clearCookie(COOKIE, cookieOptions(req));
+      return { ok: true };
+    });
+
+    routes.delete("/api/auth/account", { config: limit }, async (req, reply) => {
+      const session = await auth!.sessionFor(req.cookies[COOKIE]);
+      if (!session) return notSignedIn(reply);
+      const input = AccountDeletion.safeParse(req.body);
+      if (!input.success) return badInput(reply, input.error.issues);
+      if (isAdmin(session.user)) return reply.code(403).send({ error: "The admin account can't be deleted." });
+      if (await refusePassword(session.user, input.data.password, reply)) return reply;
+      await auth!.deleteUser(session.user.id);
+      reply.clearCookie(COOKIE, cookieOptions(req));
+      return { ok: true };
     });
   });
 

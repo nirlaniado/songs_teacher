@@ -3,6 +3,7 @@ import { useDeckStore } from "./store/deckStore.js";
 import { useLibraryStore } from "./store/libraryStore.js";
 import { AppNav, type NavSection } from "./components/AppNav.js";
 import { AccountBadge, AuthGate } from "./components/AuthGate.js";
+import { AccountPage } from "./components/AccountPage.js";
 import { DeckLibraryScreen } from "./components/DeckLibraryScreen.js";
 import { DeckScreen } from "./components/DeckScreen.js";
 import { LibraryScreen } from "./components/LibraryScreen.js";
@@ -15,7 +16,7 @@ import { Button } from "./components/controls.js";
 const GraphView = lazy(() => import("./components/GraphView.js").then((m) => ({ default: m.GraphView })));
 const UltimateGuitarAgent = lazy(() => import("./components/UltimateGuitarAgent.js").then(m => ({ default: m.UltimateGuitarAgent })));
 
-type Screen = "decks" | "editor" | "songs" | "graph" | "ug";
+type Screen = "decks" | "editor" | "songs" | "graph" | "ug" | "account";
 
 export default function App() {
   return (
@@ -61,6 +62,9 @@ function Workspace() {
     </div>
   );
 
+  const openAccount = () => setScreen("account");
+  if (screen === "account") return <AccountPage onBack={() => setScreen("decks")} />;
+
   if (screen === "ug") return section("ug", <Suspense fallback={<Centered>Loading the chord agent…</Centered>}><UltimateGuitarAgent onBack={() => setScreen("decks")} onDeckCreated={() => setScreen("editor")} /></Suspense>);
 
   if (!supported) {
@@ -102,13 +106,13 @@ function Workspace() {
           </Button>
           {error && <p className="max-w-sm text-center text-xs text-danger">{error}</p>}
           <Button variant="subtle" className="mt-3" onClick={() => setScreen("ug")}>Chord agent · Ultimate Guitar</Button>
-          <div className="mt-6"><AccountBadge /></div>
+          <div className="mt-6"><AccountBadge onAccount={openAccount} /></div>
         </div>
       </Centered>
     );
   }
 
-  if (screen === "editor") return <DeckScreen onBack={() => setScreen("decks")} />;
+  if (screen === "editor") return <DeckScreen onBack={() => setScreen("decks")} onAccount={openAccount} />;
 
   // ── song-study mode (the earlier analysis tool, kept alongside) ──────────
   if (screen === "songs" || screen === "graph") {
@@ -130,7 +134,7 @@ function Workspace() {
     return section("songs", <LibraryScreen onViewGraph={() => setScreen("graph")} />);
   }
 
-  return section("decks", <DeckLibraryScreen onOpen={() => setScreen("editor")} />);
+  return section("decks", <DeckLibraryScreen onOpen={() => setScreen("editor")} onAccount={openAccount} />);
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

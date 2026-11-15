@@ -123,8 +123,9 @@ server/
 ## Accounts backend
 
 A small Fastify service in `server/api/` that gives users username/password accounts in
-MySQL. No deck, song or audio is stored on the server. Until the editor is gated behind
-login (issue #36), it still runs without the backend.
+MySQL. No deck, song or audio is stored on the server. The app requires it: without the API
+it shows only a "can't reach the server" screen with Retry. `npm start` and `npm run dev` do
+not start it; run `npm run api:server` alongside them.
 
 1. Have a MySQL 8.0.13+ server somewhere (the app assumes nothing about where) and an empty
    database for it.
@@ -135,10 +136,13 @@ login (issue #36), it still runs without the backend.
 
 | Endpoint | Does |
 |---|---|
-| `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken) |
+| `POST /api/auth/signup` | `{username, password}` → creates the account and signs in (201; 409 if taken, or if it is `ADMIN_USERNAME`) |
 | `POST /api/auth/login` | `{username, password}` → signs in (401 on any failure) |
 | `POST /api/auth/logout` | deletes the session row and clears the cookie |
-| `GET /api/auth/me` | the signed-in user, or 401 |
+| `GET /api/auth/me` | the signed-in user, or 401; `admin: true` only on the `ADMIN_USERNAME` account |
+| `POST /api/auth/password` | `{currentPassword, newPassword}` → changes it, ends every session of the user (this one included) and signs this browser in with a new cookie (403 on a wrong current password) |
+| `POST /api/auth/logout-all` | ends every session of the user, this one included, and clears the cookie |
+| `DELETE /api/auth/account` | `{password}` → deletes the user and all their sessions (403 on a wrong password, and always for the admin account) |
 | `GET /api/health` | 200 `{database: "reachable"}`, 503 `"unreachable"` or `"not configured"` |
 
 Usernames are 3–32 letters, digits, `_` or `-`, unique ignoring case; passwords are at
@@ -146,7 +150,14 @@ least 10 characters with no composition rules. Passwords are hashed with argon2i
 session cookie is `httpOnly`, `SameSite=Lax`, `Secure` whenever the original request was
 HTTPS, and lasts 30 days; the database keeps only a SHA-256 of the cookie token. Signup and
 login are rate-limited to 10 attempts per minute per client IP, and a username is locked
-for 15 minutes after 5 failed logins from any IP.
+for 15 minutes after 5 failed logins from any IP. Changing the password and deleting the
+account check the current password, so they carry the same per-IP limit, and a wrong password
+there counts towards the same per-username lockout: a stolen session can't be used to guess it.
+
+`ADMIN_USERNAME` names the owner's account (matched ignoring case). Public sign-up refuses it
+with the same answer, after the same hashing work, as a taken username, so it reveals nothing;
+that account is made by the admin command (#39), not through sign-up. The API also refuses its
+self-deletion and tells the page not to offer it.
 
 `TRUST_PROXY` (see `.env.example`) names the proxy in front of the API, so the API can
 see the real client IP and know whether the request was HTTPS. In development that is the
