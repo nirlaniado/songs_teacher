@@ -21,10 +21,14 @@ export class Auth {
     this.dummyHash ??= await this.hasher.hash(randomBytes(16).toString("hex"));
   }
 
-  /** A `reserved` name is refused as taken, after the same hashing work, so neither answer nor timing tells it apart. */
+  /**
+   * A `reserved` name is refused as taken after the same work, one hash and one lookup, so neither answer nor timing
+   * tells it apart. createUser still refuses a duplicate that lands between the lookup and the insert.
+   */
   async signup(username: string, password: string, reserved = false) {
     const passwordHash = await this.hasher.hash(password);
-    if (reserved) throw new UsernameTaken();
+    const existing = await this.store.findUser(username);
+    if (reserved || existing) throw new UsernameTaken();
     const user = await this.store.createUser(username, passwordHash);
     return { user, ...(await this.startSession(user)) };
   }

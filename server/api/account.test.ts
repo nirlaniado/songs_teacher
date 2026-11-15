@@ -227,6 +227,35 @@ describe("the admin username at public sign-up", () => {
     expect(await store.findUser("owner")).toBeNull();
   });
 
+  it("makes the same store calls as a taken username, and none that write", async () => {
+    const { signup, call, store } = await setup({ adminUsername: "owner" });
+    await signup();
+    const calls: string[] = [];
+    for (const name of ["createUser", "findUser", "findUserById", "createSession", "findSession", "deleteSession", "setPassword", "deleteSessions", "deleteUser"] as const) {
+      const real = store[name].bind(store) as (...a: unknown[]) => Promise<unknown>;
+      (store as unknown as Record<string, unknown>)[name] = (...args: unknown[]) => (calls.push(name), real(...args));
+    }
+    const storeCalls = async (username: string) => {
+      calls.length = 0;
+      expect((await call("POST", "/api/auth/signup", { username, password: "password456" })).statusCode).toBe(409);
+      return [...calls];
+    };
+    expect(await storeCalls("ALICE")).toEqual(["findUser"]);
+    expect(await storeCalls("Owner")).toEqual(["findUser"]);
+  });
+
+  it("still answers taken when a duplicate slips in between the lookup and the insert", async () => {
+    const { call, store } = await setup();
+    const realFind = store.findUser.bind(store);
+    store.findUser = async (username: string) => {
+      const found = await realFind(username);
+      if (!found) await store.createUser(username, "h:someone else");
+      return found;
+    };
+    const res = await call("POST", "/api/auth/signup", creds);
+    expect([res.statusCode, res.json()]).toEqual([409, { error: "That username is taken." }]);
+  });
+
   it("is an ordinary username when ADMIN_USERNAME is unset", async () => {
     const { signup, call } = await setup();
     await signup({ username: "owner", password: "password789" });
