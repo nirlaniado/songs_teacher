@@ -32,7 +32,7 @@ describe("Auth", () => {
     const spy: Hasher = { hash: plain.hash, verify: async (h, p) => { calls.push(h); return plain.verify(h, p); } };
     const auth = new Auth(new MemoryStore(), spy);
     await auth.init();
-    expect(await auth.login("nobody", "password123")).toBeNull();
+    expect(await auth.login("nobody", "password123")).toEqual({ kind: "wrong" });
     expect(calls).toHaveLength(1);
   });
 
