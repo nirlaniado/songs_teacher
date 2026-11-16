@@ -1,0 +1,95 @@
+# songs-teacher: database, accounts API, web frontend, and (optionally) the chord agent.
+#
+# Values come from `.env` next to this file (compose reads it for the ${...} below):
+#   MYSQL_ROOT_PASSWORD   required
+#   MYSQL_PASSWORD        required; used inside DATABASE_URL, so avoid @ : / ? # % or URL-encode it
+#   MYSQL_DATABASE        default songs_teacher
+#   MYSQL_USER            default songs_teacher
+#   ADMIN_USERNAME        the one admin account
+#   WEB_PORT              default 8080, published on 127.0.0.1 only
+#   OPENROUTER_API_KEY, ULTIMATE_GUITAR_USERNAME, ULTIMATE_GUITAR_PASSWORD   chord agent only
+#
+# Start:          docker compose up -d --build
+# With agent:     docker compose --profile agent up -d --build
+# Create admin:   docker compose run --rm api node --import tsx server/api/make-admin.ts
+#
+# The API and the agent listen on 127.0.0.1 only, so `web` and `agent` join the api
+# container's network namespace and reach them there, exactly as Vite does in development.
+# That is also why the web port is published on the api service.
+
+x-database-url: &database-url mysql://${MYSQL_USER:-songs_teacher}:${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}@db:3306/${MYSQL_DATABASE:-songs_teacher}
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-songs_teacher}
+      MYSQL_USER: ${MYSQL_USER:-songs_teacher}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      TZ: UTC
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  migrate:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    image: songs-teacher-api
+    command: ["node", "--import", "tsx", "server/api/migrate.ts"]
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: { context: ., dockerfile: docker/api.Dockerfile }
+    image: songs-teacher-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: *database-url
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      # Only nginx in the shared namespace reaches the API, and it never relays a caller's X-Forwarded-*.
+      TRUST_PROXY: loopback
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        VITE_DEMUCS_MODEL_URL: ${VITE_DEMUCS_MODEL_URL:-}
+        VITE_ALIGN_MODEL_URL: ${VITE_ALIGN_MODEL_URL:-}
+    restart: unless-stopped
+    network_mode: "service:api"
+    depends_on:
+      api: { condition: service_healthy }
+
+  agent:
+    profiles: ["agent"]
+    build: { context: ., dockerfile: docker/agent.Dockerfile }
+    restart: unless-stopped
+    network_mode: "service:api"
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      UG_AGENT_MODEL: ${UG_AGENT_MODEL:-}
+      ULTIMATE_GUITAR_USERNAME: ${ULTIMATE_GUITAR_USERNAME:-}
+      ULTIMATE_GUITAR_PASSWORD: ${ULTIMATE_GUITAR_PASSWORD:-}
+    volumes:
+      - agent-data:/app/.ug-agent
+    depends_on:
+      - api
+
+volumes:
+  db-data:
+  agent-data:
